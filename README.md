@@ -51,4 +51,4 @@ MIT
 
 If you find this plugin helpful, consider buying me a coffee! / 如果这个插件对你有帮助，请考虑支持我！
 
-![Reward](assets/reward.png)
+<img src="assets/reward.png" width="200" />
