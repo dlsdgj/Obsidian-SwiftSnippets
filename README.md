@@ -1,12 +1,12 @@
-# SwiftGloss
+# SwiftSnippets
 
-Quickly toggle CSS Snippets from a status bar popup. (formerly SwiftSnippets)
+Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
 ![Demo](assets/demo.gif)
 
 ## Features
 
-- **Status Bar Button** — Click the SwiftGloss button in the status bar to open the management popup
+- **Status Bar Button** — Click the SwiftSnippets button in the status bar to open the management popup
 - **Toggle Snippets** — Click any snippet chip to enable/disable it instantly
 - **Custom Groups** — Right-click empty space to add groups, then drag snippets into them
 - **Drag & Drop** — Drag snippet chips between groups or back to "Ungrouped"
@@ -27,7 +27,7 @@ Quickly toggle CSS Snippets from a status bar popup. (formerly SwiftSnippets)
 ### From Obsidian Community Plugins (pending review)
 
 1. Open Settings → Community Plugins
-2. Search for "SwiftGloss"
+2. Search for "SwiftSnippets"
 3. Click Install, then Enable
 
 ## Usage
