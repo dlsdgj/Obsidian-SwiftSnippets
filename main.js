@@ -87,7 +87,7 @@ class SwiftSnippetsPlugin extends Plugin {
     _currentLang = this.settings.language || 'en';
 
     this._statusBarEl = this.addStatusBarItem();
-    this._statusBarEl.setText('SwiftSnippets');
+    this._statusBarEl.setText('SwiftGloss');
     this._statusBarEl.title = t('popup.title');
     this._statusBarEl.style.cursor = 'pointer';
     this._statusBarEl.style.opacity = '0.8';
