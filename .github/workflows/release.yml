@@ -5,6 +5,9 @@ on:
     tags:
       - "*.*.*"
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -17,4 +20,3 @@ jobs:
           files: |
             main.js
             manifest.json
-            styles.css
