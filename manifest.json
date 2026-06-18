@@ -1,7 +1,7 @@
 {
   "id": "swift-snippets",
   "name": "SwiftSnippets",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minAppVersion": "0.15.0",
   "description": "Quickly toggle CSS Snippets with a status bar popup. Supports grouping, drag reorder, and i18n.",
   "author": "nilmarko",

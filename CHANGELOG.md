@@ -1,4 +1,9 @@
-## 🆕 v1.0.0 (2026-06-18)
+## 🆕 v1.0.1 (2026-06-18)
+
+- **Fix Description / 修复描述** — Removed "Obsidian" from plugin description per community plugin guidelines / 按社区插件规范移除描述中的 "Obsidian"
+- **Fix Release Workflow / 修复发布工作流** — Removed non-existent styles.css from release workflow, added write permission / 从发布工作流移除不存在的 styles.css，添加写权限
+
+## v1.0.0 (2026-06-18)
 
 - **Initial Release / 首次发布** — SwiftSnippets is a status bar popup for quickly toggling Obsidian CSS Snippets / SwiftSnippets 是一个状态栏弹窗，用于快速切换 Obsidian CSS Snippets
 - **Status Bar Button / 状态栏按钮** — Click SwiftSnippets in the status bar to open the management popup / 点击状态栏的 SwiftSnippets 按钮打开管理弹窗
