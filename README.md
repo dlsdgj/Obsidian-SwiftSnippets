@@ -46,3 +46,9 @@ This plugin is desktop-only because it uses Node.js APIs for file operations.
 ## License
 
 MIT
+
+## Sponsor / 赞助
+
+If you find this plugin helpful, consider buying me a coffee! / 如果这个插件对你有帮助，请考虑支持我！
+
+![Reward](assets/reward.png)
