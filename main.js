@@ -68,6 +68,15 @@ const i18n = {
     'eyeCare.stripe': '条纹',
     'eyeCare.aurora': '极光',
     'eyeCare.breathe': '呼吸',
+    'eyeCare.breathe478': '4-7-8呼吸',
+    'eyeCare.breatheBox': '方块呼吸',
+    'eyeCare.edgeGlow': '边缘呼吸',
+    'eyeCare.cursorGlow': '光标呼吸',
+    'eyeCare.breathe.hint': '5秒周期，中心光晕呼吸',
+    'eyeCare.breathe478.hint': '吸气4秒-屏息7秒-呼气8秒，引导放松呼吸',
+    'eyeCare.breatheBox.hint': '吸气4秒-屏息4秒-呼气4秒-屏息4秒，均匀节奏',
+    'eyeCare.edgeGlow.hint': '屏幕四周光晕明暗呼吸',
+    'eyeCare.cursorGlow.hint': '跟随鼠标的光晕呼吸',
   },
   en: {
     'popup.title': 'SwiftSwitch',
@@ -131,6 +140,15 @@ const i18n = {
     'eyeCare.stripe': 'Stripe',
     'eyeCare.aurora': 'Aurora',
     'eyeCare.breathe': 'Breathe',
+    'eyeCare.breathe478': '4-7-8 Breathe',
+    'eyeCare.breatheBox': 'Box Breathe',
+    'eyeCare.edgeGlow': 'Edge Glow',
+    'eyeCare.cursorGlow': 'Cursor Glow',
+    'eyeCare.breathe.hint': '5s cycle, center glow breathing',
+    'eyeCare.breathe478.hint': 'Inhale 4s - Hold 7s - Exhale 8s, guided relaxation',
+    'eyeCare.breatheBox.hint': 'Inhale 4s - Hold 4s - Exhale 4s - Hold 4s, even rhythm',
+    'eyeCare.edgeGlow.hint': 'Screen edge glow breathing',
+    'eyeCare.cursorGlow.hint': 'Cursor-following glow breathing',
   }
 };
 
@@ -220,6 +238,9 @@ class SwiftSwitchPlugin extends Plugin {
     if (styleEl) styleEl.remove();
     const eyeCareEl = document.getElementById('ss-eyecare-style');
     if (eyeCareEl) eyeCareEl.remove();
+    this._removeOverlay('ss-edge-glow-overlay');
+    this._removeOverlay('ss-cursor-glow-overlay');
+    this._stopCursorTracking();
   }
 
   async loadSettings() {
@@ -345,6 +366,9 @@ class SwiftSwitchPlugin extends Plugin {
     const key = this.settings.eyeCareColor || '';
     if (!key) {
       styleEl.textContent = '';
+      this._removeOverlay('ss-edge-glow-overlay');
+      this._removeOverlay('ss-cursor-glow-overlay');
+      this._stopCursorTracking();
       return;
     }
     const isDark = document.body.classList.contains('theme-dark');
@@ -363,6 +387,10 @@ class SwiftSwitchPlugin extends Plugin {
       stripe:  { bg: '#f3efe6', bgSec: '#ebe7de', bgMod: '#e0dcd3', darkBg: '#282420', darkBgSec: '#302c26', darkBgMod: '#38342c' },
       aurora:  { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
       breathe: { bg: '#eef5ee', bgSec: '#e2ece2', bgMod: '#d6e3d6', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
+      breathe478: { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
+      breatheBox: { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
+      edgeGlow:   { bg: '#eef5ee', bgSec: '#e2ece2', bgMod: '#d6e3d6', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
+      cursorGlow: { bg: '#eef5ee', bgSec: '#e2ece2', bgMod: '#d6e3d6', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
     };
     const p = presets[key];
     if (p) {
@@ -435,6 +463,26 @@ class SwiftSwitchPlugin extends Plugin {
         patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(100,200,150,0.22) 0%, transparent 70%);
           animation: ss-breathe 5s ease-in-out infinite;`;
       }
+    } else if (key === 'breathe478') {
+      if (isDark) {
+        patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(80,180,130,0.18) 0%, transparent 70%);
+          animation: ss-breathe478 19s ease-in-out infinite;`;
+      } else {
+        patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(100,200,150,0.25) 0%, transparent 70%);
+          animation: ss-breathe478 19s ease-in-out infinite;`;
+      }
+    } else if (key === 'breatheBox') {
+      if (isDark) {
+        patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(80,180,130,0.18) 0%, transparent 70%);
+          animation: ss-breatheBox 16s ease-in-out infinite;`;
+      } else {
+        patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(100,200,150,0.25) 0%, transparent 70%);
+          animation: ss-breatheBox 16s ease-in-out infinite;`;
+      }
+    } else if (key === 'edgeGlow') {
+      patternCSS = '';
+    } else if (key === 'cursorGlow') {
+      patternCSS = '';
     }
     let animCSS = '';
     if (key === 'aurora') {
@@ -452,7 +500,64 @@ class SwiftSwitchPlugin extends Plugin {
           50% { background-size: 140% 140%; opacity: 1; }
         }
       `;
+    } else if (key === 'breathe478') {
+      animCSS = `
+        @keyframes ss-breathe478 {
+          0% { background-size: 60% 60%; opacity: 0.5; }
+          21.05% { background-size: 140% 140%; opacity: 1; }
+          57.89% { background-size: 140% 140%; opacity: 1; }
+          100% { background-size: 60% 60%; opacity: 0.5; }
+        }
+      `;
+    } else if (key === 'breatheBox') {
+      animCSS = `
+        @keyframes ss-breatheBox {
+          0% { background-size: 60% 60%; opacity: 0.5; }
+          25% { background-size: 140% 140%; opacity: 1; }
+          50% { background-size: 140% 140%; opacity: 1; }
+          75% { background-size: 60% 60%; opacity: 0.5; }
+          100% { background-size: 60% 60%; opacity: 0.5; }
+        }
+      `;
     }
+    let extraCSS = '';
+    if (key === 'edgeGlow') {
+      const glowColor = isDark ? 'rgba(80,180,130,0.2)' : 'rgba(100,200,150,0.2)';
+      const glowColorFaint = isDark ? 'rgba(80,180,130,0.08)' : 'rgba(100,200,150,0.08)';
+      extraCSS = `
+        @keyframes ss-edgeGlow {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 1; }
+        }
+        #ss-edge-glow-overlay {
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          pointer-events: none; z-index: 9990;
+          box-shadow: inset 0 0 120px 40px ${glowColor}, inset 0 0 40px 10px ${glowColorFaint};
+          animation: ss-edgeGlow 5s ease-in-out infinite;
+        }
+      `;
+      this._ensureOverlay('ss-edge-glow-overlay');
+    } else if (key === 'cursorGlow') {
+      const cursorColor = isDark ? 'rgba(80,180,130,0.18)' : 'rgba(100,200,150,0.18)';
+      extraCSS = `
+        @keyframes ss-cursorGlow {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 1; }
+        }
+        #ss-cursor-glow-overlay {
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          pointer-events: none; z-index: 9990;
+          background: radial-gradient(circle 180px at var(--ss-cursor-x, 50%) var(--ss-cursor-y, 50%), ${cursorColor}, transparent 70%);
+          transition: background 0.1s ease;
+          animation: ss-cursorGlow 5s ease-in-out infinite;
+        }
+      `;
+      this._ensureOverlay('ss-cursor-glow-overlay');
+      this._startCursorTracking();
+    }
+    if (key !== 'cursorGlow') { this._stopCursorTracking(); }
+    if (key !== 'edgeGlow') { this._removeOverlay('ss-edge-glow-overlay'); }
+    if (key !== 'cursorGlow') { this._removeOverlay('ss-cursor-glow-overlay'); }
     styleEl.textContent = `
       ${animCSS}
       .workspace-leaf-content,
@@ -471,7 +576,43 @@ class SwiftSwitchPlugin extends Plugin {
         background-color: ${bg};
         ${patternCSS}
       }
+      ${extraCSS}
     `;
+  }
+
+  _ensureOverlay(id) {
+    if (!document.getElementById(id)) {
+      const el = document.createElement('div');
+      el.id = id;
+      document.body.appendChild(el);
+    }
+  }
+
+  _removeOverlay(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
+
+  _startCursorTracking() {
+    if (this._cursorTracking) return;
+    this._cursorTracking = true;
+    this._cursorHandler = (e) => {
+      const overlay = document.getElementById('ss-cursor-glow-overlay');
+      if (overlay) {
+        overlay.style.setProperty('--ss-cursor-x', e.clientX + 'px');
+        overlay.style.setProperty('--ss-cursor-y', e.clientY + 'px');
+      }
+    };
+    document.addEventListener('mousemove', this._cursorHandler);
+  }
+
+  _stopCursorTracking() {
+    if (!this._cursorTracking) return;
+    this._cursorTracking = false;
+    if (this._cursorHandler) {
+      document.removeEventListener('mousemove', this._cursorHandler);
+      this._cursorHandler = null;
+    }
   }
 
   // ─── 护眼色预设列表 ──────────────────────────────────────────────────
@@ -490,6 +631,10 @@ class SwiftSwitchPlugin extends Plugin {
       { key: 'stripe', color: '#f3efe6', darkColor: '#282420', label: t('eyeCare.stripe'), pattern: 'stripe' },
       { key: 'aurora', color: '#e8f0e8', darkColor: '#1e2820', label: t('eyeCare.aurora'), pattern: 'aurora' },
       { key: 'breathe',color: '#eef5ee', darkColor: '#1e2820', label: t('eyeCare.breathe'),pattern: 'breathe' },
+      { key: 'breathe478', color: '#e8f0e8', darkColor: '#1e2820', label: t('eyeCare.breathe478'), pattern: 'breathe478' },
+      { key: 'breatheBox', color: '#e8f0e8', darkColor: '#1e2820', label: t('eyeCare.breatheBox'), pattern: 'breatheBox' },
+      { key: 'edgeGlow',   color: '#eef5ee', darkColor: '#1e2820', label: t('eyeCare.edgeGlow'),   pattern: 'edgeGlow' },
+      { key: 'cursorGlow', color: '#eef5ee', darkColor: '#1e2820', label: t('eyeCare.cursorGlow'), pattern: 'cursorGlow' },
     ];
   }
 
@@ -656,11 +801,24 @@ class SwiftSwitchPlugin extends Plugin {
       }
     });
 
-    // 滚轮：普通切换主题，Ctrl/Shift切换护眼色
+    // 滚轮：普通切换护眼色，Ctrl/Shift切换主题
     btn.addEventListener('wheel', async (e) => {
       e.preventDefault();
       if (e.ctrlKey || e.shiftKey) {
-        // Ctrl/Shift+滚轮：切换护眼色
+        // Ctrl/Shift+滚轮：切换主题
+        const { currentTheme, themeDirs } = await this.getThemeInfo();
+        if (themeDirs.length === 0) return;
+        const list = [''].concat(themeDirs);
+        const idx = list.indexOf(currentTheme);
+        let nextIdx;
+        if (e.deltaY > 0) {
+          nextIdx = idx < list.length - 1 ? idx + 1 : 0;
+        } else {
+          nextIdx = idx > 0 ? idx - 1 : list.length - 1;
+        }
+        await this.switchTheme(list[nextIdx]);
+      } else {
+        // 普通滚轮：切换护眼色
         const presets = this._eyeCarePresets();
         const currentKey = this.settings.eyeCareColor || '';
         const idx = presets.findIndex(p => p.key === currentKey);
@@ -674,19 +832,6 @@ class SwiftSwitchPlugin extends Plugin {
         this.applyEyeCareColor();
         this.saveSettings();
         new Notice(presets[nextIdx].label);
-      } else {
-        // 普通滚轮：切换主题
-        const { currentTheme, themeDirs } = await this.getThemeInfo();
-        if (themeDirs.length === 0) return;
-        const list = [''].concat(themeDirs);
-        const idx = list.indexOf(currentTheme);
-        let nextIdx;
-        if (e.deltaY > 0) {
-          nextIdx = idx < list.length - 1 ? idx + 1 : 0;
-        } else {
-          nextIdx = idx > 0 ? idx - 1 : list.length - 1;
-        }
-        await this.switchTheme(list[nextIdx]);
       }
     });
 
@@ -1149,7 +1294,7 @@ class SwiftSwitchPlugin extends Plugin {
     title.style.cssText = 'margin:0;font-size:15px;color:var(--text-normal);';
 
     const versionTag = leftHeader.createEl('span');
-     versionTag.textContent = 'v1.0.3';
+     versionTag.textContent = 'v1.0.4';
     versionTag.style.cssText = 'font-size:10px;color:var(--text-faint);margin-left:2px;align-self:flex-end;margin-bottom:2px;';
 
     const pinBtn = leftHeader.createEl('span');
@@ -1408,10 +1553,38 @@ class SwiftSwitchPlugin extends Plugin {
           } else {
             dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(100,180,130,0.4),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
           }
+        } else if (p.pattern === 'breathe478') {
+          if (isDarkChip) {
+            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(80,180,130,0.5),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe478 3s ease-in-out infinite;`;
+          } else {
+            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(100,180,130,0.4),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe478 3s ease-in-out infinite;`;
+          }
+        } else if (p.pattern === 'breatheBox') {
+          if (isDarkChip) {
+            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(80,180,130,0.5),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breatheBox 2.5s ease-in-out infinite;`;
+          } else {
+            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(100,180,130,0.4),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breatheBox 2.5s ease-in-out infinite;`;
+          }
+        } else if (p.pattern === 'edgeGlow') {
+          if (isDarkChip) {
+            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:transparent;border:2px solid rgba(80,180,130,0.5);box-shadow:0 0 3px rgba(80,180,130,0.4);flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
+          } else {
+            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:transparent;border:2px solid rgba(100,200,150,0.4);box-shadow:0 0 3px rgba(100,200,150,0.3);flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
+          }
+        } else if (p.pattern === 'cursorGlow') {
+          if (isDarkChip) {
+            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 40% 40%,rgba(80,180,130,0.6),transparent 70%);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
+          } else {
+            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 40% 40%,rgba(100,200,150,0.5),transparent 70%);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
+          }
         } else {
           dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;`;
         }
         chip.createEl('span', { text: p.label });
+        const hintKey = 'eyeCare.' + p.key + '.hint';
+        if (i18n[_currentLang] && i18n[_currentLang].hasOwnProperty(hintKey)) {
+          chip.title = t(hintKey);
+        }
         chip.addEventListener('click', async () => {
           this.settings.eyeCareColor = p.key;
           this.applyEyeCareColor();
@@ -1711,7 +1884,7 @@ class SwiftSwitchPlugin extends Plugin {
     if (!animStyle) {
       animStyle = document.createElement('style');
       animStyle.id = 'ss-popup-anim';
-      animStyle.textContent = `@keyframes ss-dot-breathe{0%,100%{opacity:0.6;transform:scale(1)}50%{opacity:1;transform:scale(1.15)}}`;
+      animStyle.textContent = `@keyframes ss-dot-breathe{0%,100%{opacity:0.6;transform:scale(1)}50%{opacity:1;transform:scale(1.15)}}@keyframes ss-dot-breathe478{0%{opacity:0.5;transform:scale(0.8)}21%{opacity:1;transform:scale(1.2)}58%{opacity:1;transform:scale(1.2)}100%{opacity:0.5;transform:scale(0.8)}}@keyframes ss-dot-breatheBox{0%{opacity:0.5;transform:scale(0.8)}25%{opacity:1;transform:scale(1.2)}50%{opacity:1;transform:scale(1.2)}75%{opacity:0.5;transform:scale(0.8)}100%{opacity:0.5;transform:scale(0.8)}}`;
       document.head.appendChild(animStyle);
     }
 

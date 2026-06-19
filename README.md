@@ -44,6 +44,14 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
 ## Changelog
 
+### v1.0.4 (2026-06-19)
+
+- **Meditation Breathing Presets** — Added 4-7-8 breathing (inhale 4s-hold 7s-exhale 8s) and Box breathing (4-4-4-4) guided visual animations
+- **Edge Glow** — Screen edge glow breathing effect via box-shadow overlay
+- **Cursor Glow** — Mouse-following radial glow with breathing animation
+- **Scroll Wheel Swap** — Scroll now cycles eye care colors; Ctrl/Shift+scroll switches themes
+- **Breathing Chip Hints** — Hover on breathing chips to see rhythm description
+
 ### v1.0.3 (2026-06-19)
 
 - **Pull Cord Fix** — Fixed pull cord not hiding after drag, stale event listeners causing ghost pull cord on screen

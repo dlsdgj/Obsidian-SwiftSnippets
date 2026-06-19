@@ -1,4 +1,12 @@
-## 🆕 v1.0.3 (2026-06-19)
+## 🆕 v1.0.4 (2026-06-19)
+
+- **Meditation Breathing / 冥想呼吸** — Added 4-7-8 breathing (inhale 4s-hold 7s-exhale 8s) and Box breathing (4-4-4-4) guided visual animations / 新增4-7-8呼吸法和方块呼吸引导动画
+- **Edge Glow / 边缘呼吸** — Screen edge glow breathing effect via box-shadow overlay / 屏幕四周光晕明暗呼吸
+- **Cursor Glow / 光标呼吸** — Mouse-following radial glow with breathing animation / 跟随鼠标的径向光晕呼吸
+- **Scroll Wheel Swap / 滚轮行为调转** — Scroll now cycles eye care colors; Ctrl/Shift+scroll switches themes / 滚轮切换护眼色，Ctrl/Shift+滚轮切换主题
+- **Breathing Chip Hints / 呼吸提示** — Hover on breathing chips to see rhythm description / 悬停呼吸chip查看节奏说明
+
+## v1.0.3 (2026-06-19)
 
 - **Pull Cord Fix / 拉绳修复** — Fixed pull cord not hiding after drag, stale event listeners causing ghost pull cord / 修复拉绳操作后不消失、残留幽灵拉绳的问题
 - **Floating Button Cleanup / 悬浮按钮清理** — Properly cleanup global event listeners when recreating floating button on mode switch / 模式切换重建悬浮按钮时正确清理全局事件监听器
