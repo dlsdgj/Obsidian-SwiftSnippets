@@ -46,7 +46,8 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 5. Right-click empty space in the popup to add a new group
 6. Drag snippets between groups to organize them
 
-## Changelog
+<details>
+<summary>Changelog</summary>
 
 ### v1.0.4 (2026-06-19)
 
@@ -69,6 +70,8 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 - **Floating Button Redesign** — New default gradient style: tangerine (dark mode) / grey (light mode)
 - **Popup Position Memory** — Popup remembers its position after being dragged
 - **Feedback Chip** — Added a "Feedback" link to GitHub in the popup footer
+
+</details>
 
 ## Development
 
