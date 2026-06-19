@@ -4,8 +4,6 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
 ![Demo](assets/demo.gif)
 
-![Demo 2](assets/demo2.gif)
-
 ## Features
 
 - **Status Bar Button** — Click the SwiftSwitch button in the status bar to open the management popup
@@ -16,11 +14,12 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 - **i18n** — Switch between Chinese and English via the CN/EN toggle in the popup header
 - **Right-click Menu** — Copy content, edit, edit (open externally), delete, move to group
 - **Add New Snippet** — Create new CSS snippets directly from the popup
-- **Eye Care Colors** — Choose from warm background presets to reduce eye strain
-- **Eye Care Patterns** — Textured backgrounds: linen, dots, grid, stripe, aurora, breathe
+- **Eye Care Colors& Patterns** — Textured backgrounds: linen, dots, grid, stripe, aurora, breathe
 - **Dark/Light Mode Auto-Switch** — Eye care colors and floating button auto-adapt when switching modes
 - **Floating Button** — Pin a draggable floating button with tangerine (dark) / grey (light) gradient style
-- **Popup Position Memory** — Popup remembers its last position after being dragged
+
+
+![Floating Button](assets/floatingButton.gif)
 
 ## Installation
 
@@ -46,8 +45,7 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 5. Right-click empty space in the popup to add a new group
 6. Drag snippets between groups to organize them
 
-<details>
-<summary>Changelog</summary>
+## Changelog
 
 ### v1.0.4 (2026-06-19)
 
@@ -70,8 +68,6 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 - **Floating Button Redesign** — New default gradient style: tangerine (dark mode) / grey (light mode)
 - **Popup Position Memory** — Popup remembers its position after being dragged
 - **Feedback Chip** — Added a "Feedback" link to GitHub in the popup footer
-
-</details>
 
 ## Development
 
