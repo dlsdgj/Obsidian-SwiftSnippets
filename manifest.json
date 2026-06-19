@@ -1,9 +1,9 @@
 {
   "id": "swift-snippets",
-  "name": "SwiftGloss",
-  "version": "1.8.0",
+  "name": "SwiftSwitch",
+  "version": "1.0.2",
   "minAppVersion": "0.15.0",
-  "description": "Quickly toggle CSS Snippets with a status bar popup. Supports grouping, drag reorder, and i18n. (formerly SwiftSnippets)",
+  "description": "Quickly toggle CSS Snippets with a status bar popup. Supports grouping, drag reorder, and i18n.",
   "author": "nilmarko",
   "authorUrl": "",
   "isDesktopOnly": true

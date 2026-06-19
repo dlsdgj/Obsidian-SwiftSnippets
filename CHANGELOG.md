@@ -1,4 +1,13 @@
-## 🆕 v1.0.1 (2026-06-18)
+## 🆕 v1.0.2 (2026-06-19)
+
+- **Rename to SwiftSwitch / 更名为 SwiftSwitch** — Plugin renamed from SwiftSnippets to SwiftSwitch (id unchanged) / 插件从 SwiftSnippets 更名为 SwiftSwitch（id 不变）
+- **Eye Care Patterns / 护眼纹理** — Added 6 textured eye care presets: linen, dots, grid, stripe, aurora, breathe / 新增 6 种纹理护眼色：亚麻纹、波点、方格、条纹、极光、呼吸
+- **Dark Mode Eye Care / 深色模式护眼色** — All eye care presets now have dark mode counterparts with auto-switching / 所有护眼色预设新增深色模式版本，切换模式时自动适配
+- **Floating Button Redesign / 悬浮按钮重设计** — New default gradient style: tangerine (dark mode) / grey (light mode) / 新默认渐变样式：深色模式橙黄渐变 / 浅色模式灰白渐变
+- **Popup Position Memory / 面板位置记忆** — Popup remembers its position after being dragged / 面板拖拽后记住坐标，下次打开恢复
+- **Feedback Chip / 反馈链接** — Added a "Feedback" link to GitHub in the popup footer / 面板底部新增"反馈"链接
+
+## v1.0.1 (2026-06-18)
 
 - **Fix Description / 修复描述** — Removed "Obsidian" from plugin description per community plugin guidelines / 按社区插件规范移除描述中的 "Obsidian"
 - **Fix Release Workflow / 修复发布工作流** — Removed non-existent styles.css from release workflow, added write permission / 从发布工作流移除不存在的 styles.css，添加写权限
