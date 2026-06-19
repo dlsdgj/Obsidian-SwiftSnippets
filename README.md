@@ -44,6 +44,11 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
 ## Changelog
 
+### v1.0.3 (2026-06-19)
+
+- **Pull Cord Fix** — Fixed pull cord not hiding after drag, stale event listeners causing ghost pull cord on screen
+- **Floating Button Cleanup** — Properly cleanup global event listeners when recreating floating button on mode switch
+
 ### v1.0.2 (2026-06-19)
 
 - **Rename to SwiftSwitch** — Plugin renamed from SwiftSnippets to SwiftSwitch (id unchanged)

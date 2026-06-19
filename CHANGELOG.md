@@ -1,4 +1,9 @@
-## 🆕 v1.0.2 (2026-06-19)
+## 🆕 v1.0.3 (2026-06-19)
+
+- **Pull Cord Fix / 拉绳修复** — Fixed pull cord not hiding after drag, stale event listeners causing ghost pull cord / 修复拉绳操作后不消失、残留幽灵拉绳的问题
+- **Floating Button Cleanup / 悬浮按钮清理** — Properly cleanup global event listeners when recreating floating button on mode switch / 模式切换重建悬浮按钮时正确清理全局事件监听器
+
+## v1.0.2 (2026-06-19)
 
 - **Rename to SwiftSwitch / 更名为 SwiftSwitch** — Plugin renamed from SwiftSnippets to SwiftSwitch (id unchanged) / 插件从 SwiftSnippets 更名为 SwiftSwitch（id 不变）
 - **Eye Care Patterns / 护眼纹理** — Added 6 textured eye care presets: linen, dots, grid, stripe, aurora, breathe / 新增 6 种纹理护眼色：亚麻纹、波点、方格、条纹、极光、呼吸

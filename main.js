@@ -203,14 +203,19 @@ class SwiftSwitchPlugin extends Plugin {
 
   onunload() {
     if (this._modeObserver) { this._modeObserver.disconnect(); this._modeObserver = null; }
+    const fb = document.getElementById('ss-floating-button');
+    if (fb) {
+      if (fb._ssResizeHandler) window.removeEventListener('resize', fb._ssResizeHandler);
+      if (fb._ssCleanup) fb._ssCleanup();
+      fb.remove();
+    }
+    const pc = document.getElementById('ss-pull-cord');
+    if (pc) pc.remove();
     const existing = document.getElementById('ss-snippets-popup');
     if (existing) existing.remove();
     const ov = document.getElementById('ss-snippets-overlay');
     if (ov) ov.remove();
-    const fb = document.getElementById('ss-floating-button');
-    if (fb) fb.remove();
-    const pc = document.getElementById('ss-pull-cord');
-    if (pc) pc.remove();
+
     const styleEl = document.getElementById('ss-float-custom-style');
     if (styleEl) styleEl.remove();
     const eyeCareEl = document.getElementById('ss-eyecare-style');
@@ -491,9 +496,12 @@ class SwiftSwitchPlugin extends Plugin {
   // ─── 悬浮按钮 ────────────────────────────────────────────────────────
   createFloatingButton() {
     const existing = document.getElementById('ss-floating-button');
-    if (existing) existing.remove();
+    if (existing) {
+      if (existing._ssResizeHandler) window.removeEventListener('resize', existing._ssResizeHandler);
+      if (existing._ssCleanup) existing._ssCleanup();
+      existing.remove();
+    }
 
-    // 移除旧的自定义样式
     const oldStyle = document.getElementById('ss-float-custom-style');
     if (oldStyle) oldStyle.remove();
 
@@ -723,6 +731,7 @@ class SwiftSwitchPlugin extends Plugin {
           y: parseFloat(btn.style.top) || 0,
         };
         this.saveSettings();
+        pullCord.style.opacity = '0';
       }
       setTimeout(() => { isDragging = false; }, 50);
     };
@@ -795,20 +804,19 @@ class SwiftSwitchPlugin extends Plugin {
       pullKnob.style.transition = 'none';
     });
 
-    document.addEventListener('mousemove', (e) => {
+    const onPullMove = (e) => {
       if (!pullCordDragging) return;
       const dy = e.clientY - pullStartY;
       const newHeight = Math.max(10, cordBaseHeight + dy);
       cord.style.height = newHeight + 'px';
-      // 拉得越远，拉手越大
       const scale = 1 + Math.min(dy / pullThreshold, 0.5);
       pullKnob.style.transform = `scale(${scale})`;
       pullKnob.style.boxShadow = dy > pullThreshold * 0.6
         ? '0 2px 8px rgba(0,0,0,0.5), 0 0 6px var(--interactive-accent)'
         : '0 1px 3px rgba(0,0,0,0.3)';
-    });
+    };
 
-    document.addEventListener('mouseup', async (e) => {
+    const onPullEnd = async (e) => {
       if (!pullCordDragging) return;
       pullCordDragging = false;
       const dy = e.clientY - pullStartY;
@@ -816,33 +824,37 @@ class SwiftSwitchPlugin extends Plugin {
       pullKnob.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), all 0.15s ease';
 
       if (dy > pullThreshold) {
-        // 触发切换！回弹动画
         cord.style.height = cordBaseHeight + 'px';
         pullKnob.style.transform = 'scale(1)';
         pullKnob.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
-        // 闪烁效果
         pullKnob.style.background = 'radial-gradient(circle at 35% 35%, var(--interactive-accent), var(--text-muted))';
         setTimeout(() => {
           pullKnob.style.background = 'radial-gradient(circle at 35% 35%, var(--text-normal), var(--text-muted))';
         }, 400);
         await this.toggleMode();
       } else {
-        // 回弹
         cord.style.height = cordBaseHeight + 'px';
         pullKnob.style.transform = 'scale(1)';
         pullKnob.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
       }
-    });
+      setTimeout(() => { pullCord.style.opacity = '0'; }, 300);
+    };
+
+    document.addEventListener('mousemove', onPullMove);
+    document.addEventListener('mouseup', onPullEnd);
 
     document.body.appendChild(btn);
     document.body.appendChild(pullCord);
-    // 初始定位
     requestAnimationFrame(positionPullCord);
-    // 窗口大小变化时更新位置
     const resizeHandler = () => positionPullCord();
     window.addEventListener('resize', resizeHandler);
-    // 存储以便清理
     btn._ssResizeHandler = resizeHandler;
+    btn._ssCleanup = () => {
+      document.removeEventListener('mousemove', onDragMove);
+      document.removeEventListener('mouseup', onDragEnd);
+      document.removeEventListener('mousemove', onPullMove);
+      document.removeEventListener('mouseup', onPullEnd);
+    };
   }
 
   // ─── 注入悬浮按钮自定义 CSS ──────────────────────────────────────────
@@ -1137,7 +1149,7 @@ class SwiftSwitchPlugin extends Plugin {
     title.style.cssText = 'margin:0;font-size:15px;color:var(--text-normal);';
 
     const versionTag = leftHeader.createEl('span');
-     versionTag.textContent = 'v1.0.2';
+     versionTag.textContent = 'v1.0.3';
     versionTag.style.cssText = 'font-size:10px;color:var(--text-faint);margin-left:2px;align-self:flex-end;margin-bottom:2px;';
 
     const pinBtn = leftHeader.createEl('span');
