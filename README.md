@@ -2,6 +2,8 @@
 
 Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
+![Demo](assets/demo.gif)
+
 ## Features
 
 - **Status Bar Button** — Click the SwiftSwitch button in the status bar to open the management popup
@@ -73,3 +75,9 @@ This plugin is desktop-only because it uses Node.js APIs for file operations.
 ## License
 
 MIT
+
+## Sponsor / 赞助
+
+If you find this plugin helpful, consider buying me a coffee! / 如果这个插件对你有帮助，请考虑支持我！
+
+<img src="assets/reward.png" width="300" />
