@@ -1,4 +1,13 @@
-## 🆕 v1.0.5 (2026-06-20)
+## 🆕 v1.0.6 (2026-06-20)
+
+- **Silent Page Switch / 静默页面切换** — No more notification popups when switching between pages with style memory / 切换页面时不再显示通知弹窗
+- **Popup Scroll-through Fix / 面板滚轮穿透修复** — Mouse wheel properly passes through popup overlay to scroll the page beneath / 滚轮事件正确穿透面板传递到下方页面
+- **Pull Cord Fix / 拉绳修复** — Pull cord no longer stretches the popup layout; positioned absolutely below the indicator button / 拉绳不再拉伸面板布局，绝对定位在指示按钮下方
+- **Indicator Button Redesign / 指示按钮重设计** — Compact circular gradient button matching floating button style; click toggles floating button, pull cord switches dark/light mode / 紧凑圆形渐变按钮匹配悬浮按钮样式；点击切换悬浮按钮，拉绳切换深浅模式
+- **Stable Scrollbar / 稳定滚动条** — scrollbar-gutter: stable prevents chip reflow / 防止滚动条出现时 chip 重排
+- **Dialog Protection / 对话框保护** — Adding/deleting groups no longer accidentally closes the management popup / 添加/删除分组不再意外关闭管理面板
+
+## v1.0.5 (2026-06-20)
 
 - **Page Style Memory / 页面风格记忆** — Remember each page's theme, dark/light mode, eye care color, and enabled snippets; auto-restore on page switch / 记住每个页面的主题、深浅模式、护眼色和已启用 Snippet，切换页面时自动恢复
 - **Exclusive Groups / 互斥分组** — Snippets in exclusive groups (e.g. "标题") cannot be enabled simultaneously; toggle via group header ⊘ button or right-click menu / 互斥分组中的 Snippet 不能同时开启，通过分组头 ⊘ 按钮或右键菜单切换

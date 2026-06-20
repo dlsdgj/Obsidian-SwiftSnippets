@@ -367,7 +367,7 @@ class SwiftSwitchPlugin extends Plugin {
   }
 
   // ─── 切换主题 ────────────────────────────────────────────────────────
-  async switchTheme(themeName) {
+  async switchTheme(themeName, silent = false) {
     try {
       const appDataStr = await this.app.vault.adapter.read('.obsidian/appearance.json');
       const appData = JSON.parse(appDataStr);
@@ -379,30 +379,29 @@ class SwiftSwitchPlugin extends Plugin {
       } else if (this.app.customCss && typeof this.app.customCss.theme === 'string') {
         this.app.customCss.theme = themeName;
       }
-      new Notice(t('theme.switched') + (themeName ? '' : ' - ' + t('theme.restartRequired')));
+      if (!silent) new Notice(t('theme.switched') + (themeName ? '' : ' - ' + t('theme.restartRequired')));
     } catch (_e) {
       new Notice(t('theme.switchFailed'));
     }
   }
 
   // ─── 切换深浅模式 ──────────────────────────────────────────────────────
-  async toggleMode() {
+  async toggleMode(silent = false) {
     try {
       const isDark = document.body.classList.contains('theme-dark');
       const appDataStr = await this.app.vault.adapter.read('.obsidian/appearance.json');
       const appData = JSON.parse(appDataStr);
       appData.baseTheme = isDark ? 'moonstone' : 'obsidian';
       await this.app.vault.adapter.write('.obsidian/appearance.json', JSON.stringify(appData, null, 2));
-      // 实时切换
       if (this.app.customCss && typeof this.app.customCss.setMode === 'function') {
         this.app.customCss.setMode(isDark ? 'moonstone' : 'obsidian');
       } else {
         document.body.classList.toggle('theme-dark', !isDark);
         document.body.classList.toggle('theme-light', isDark);
       }
-      new Notice(t('mode.switched'));
+      if (!silent) new Notice(t('mode.switched'));
     } catch (_e) {
-      new Notice(t('mode.switchFailed'));
+      if (!silent) new Notice(t('mode.switchFailed'));
     }
   }
 
@@ -1253,12 +1252,12 @@ class SwiftSwitchPlugin extends Plugin {
     if (!profile) return;
     try {
       if (profile.theme !== undefined) {
-        await this.switchTheme(profile.theme);
+        await this.switchTheme(profile.theme, true);
       }
       if (profile.isDark !== undefined) {
         const currentIsDark = document.body.classList.contains('theme-dark');
         if (currentIsDark !== profile.isDark) {
-          await this.toggleMode();
+          await this.toggleMode(true);
         }
       }
       if (profile.eyeCareColor !== undefined) {
@@ -1274,9 +1273,7 @@ class SwiftSwitchPlugin extends Plugin {
           this._setSnippetEnabled(name, shouldBeEnabled);
         }
       }
-      new Notice(t('styleMemory.restored'));
     } catch (_e) {
-      new Notice(t('styleMemory.restoreFailed'));
     }
   }
 
@@ -1435,7 +1432,7 @@ class SwiftSwitchPlugin extends Plugin {
     title.style.cssText = 'margin:0;font-size:15px;color:var(--text-normal);';
 
     const versionTag = leftHeader.createEl('span');
-     versionTag.textContent = 'v1.0.5';
+     versionTag.textContent = 'v1.0.6';
     versionTag.style.cssText = 'font-size:10px;color:var(--text-faint);margin-left:2px;align-self:flex-end;margin-bottom:2px;';
 
 

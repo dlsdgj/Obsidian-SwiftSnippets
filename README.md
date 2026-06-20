@@ -1,7 +1,4 @@
 # SwiftSwitch
-https://www.bilibili.com/video/BV17Ujk6tEZQ
-
-https://www.bilibili.com/video/BV16Njy6vEdr
 
 Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
@@ -52,6 +49,15 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
 <details>
 <summary>Changelog</summary>
+
+### v1.0.6 (2026-06-20)
+
+- **Silent Page Switch** — No more notification popups when switching between pages with style memory
+- **Popup Scroll-through Fix** — Mouse wheel properly passes through popup overlay to scroll the page beneath
+- **Pull Cord Fix** — Pull cord no longer stretches the popup layout; positioned absolutely below the indicator button
+- **Indicator Button Redesign** — Compact circular gradient button matching floating button style; click toggles floating button, pull cord switches dark/light mode
+- **Stable Scrollbar** — `scrollbar-gutter: stable` prevents chip reflow when scrollbar appears
+- **Dialog Protection** — Adding/deleting groups no longer accidentally closes the management popup
 
 ### v1.0.5 (2026-06-20)
 
