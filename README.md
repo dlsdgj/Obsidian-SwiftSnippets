@@ -47,6 +47,18 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
 ## Changelog
 
+<details>
+<summary>Changelog</summary>
+
+### v1.0.5 (2026-06-20)
+
+- **Page Style Memory** — Remember each page's theme, dark/light mode, eye care color, and enabled snippets; auto-restore on page switch
+- **Exclusive Groups** — Snippets in exclusive groups (e.g. "标题") cannot be enabled simultaneously; toggle via group header ⊘ button or right-click menu
+- **Floating Button Toggle** — Dark/light indicator button in popup now toggles floating button visibility; pull cord switches dark/light mode
+- **Popup Scroll-through** — Mouse wheel events pass through the popup overlay to the page beneath
+- **Stable Scrollbar** — Popup uses `scrollbar-gutter: stable` to prevent chip reflow when scrollbar appears
+- **Snippet Cache** — In-memory cache for snippet enabled state, fixing stale chip status after toggling
+
 ### v1.0.4 (2026-06-19)
 
 - **Meditation Breathing Presets** — Added 4-7-8 breathing (inhale 4s-hold 7s-exhale 8s) and Box breathing (4-4-4-4) guided visual animations
@@ -68,6 +80,8 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 - **Floating Button Redesign** — New default gradient style: tangerine (dark mode) / grey (light mode)
 - **Popup Position Memory** — Popup remembers its position after being dragged
 - **Feedback Chip** — Added a "Feedback" link to GitHub in the popup footer
+
+</details>
 
 ## Development
 

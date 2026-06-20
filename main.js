@@ -77,6 +77,17 @@ const i18n = {
     'eyeCare.breatheBox.hint': '吸气4秒-屏息4秒-呼气4秒-屏息4秒，均匀节奏',
     'eyeCare.edgeGlow.hint': '屏幕四周光晕明暗呼吸',
     'eyeCare.cursorGlow.hint': '跟随鼠标的光晕呼吸',
+    'styleMemory.chip': '记忆模式',
+    'styleMemory.hint': '记忆模式：记住每个页面的风格，切换时自动恢复',
+    'styleMemory.on': '记忆模式已开启',
+    'styleMemory.off': '记忆模式已关闭',
+    'styleMemory.saved': '页面风格已记忆',
+    'styleMemory.restored': '已恢复页面风格',
+    'styleMemory.restoreFailed': '恢复页面风格失败',
+    'group.exclusive': '互斥分组',
+    'group.exclusive.on': '已设为互斥分组',
+    'group.exclusive.off': '已取消互斥分组',
+    'group.exclusive.hint': '互斥分组中的 Snippet 不能同时开启',
   },
   en: {
     'popup.title': 'SwiftSwitch',
@@ -149,6 +160,17 @@ const i18n = {
     'eyeCare.breatheBox.hint': 'Inhale 4s - Hold 4s - Exhale 4s - Hold 4s, even rhythm',
     'eyeCare.edgeGlow.hint': 'Screen edge glow breathing',
     'eyeCare.cursorGlow.hint': 'Cursor-following glow breathing',
+    'styleMemory.chip': 'Memory Mode',
+    'styleMemory.hint': 'Memory mode: remember each page style, auto-restore on switch',
+    'styleMemory.on': 'Memory mode on',
+    'styleMemory.off': 'Memory mode off',
+    'styleMemory.saved': 'Page style saved',
+    'styleMemory.restored': 'Page style restored',
+    'styleMemory.restoreFailed': 'Failed to restore page style',
+    'group.exclusive': 'Exclusive Group',
+    'group.exclusive.on': 'Set as exclusive group',
+    'group.exclusive.off': 'Exclusive group removed',
+    'group.exclusive.hint': 'Snippets in exclusive group cannot be enabled simultaneously',
   }
 };
 
@@ -207,6 +229,26 @@ class SwiftSwitchPlugin extends Plugin {
       this.applyEyeCareColor();
     }
 
+    // 页面风格记忆：监听活动 leaf 变化
+    this._lastFilePath = this._getActiveFilePath();
+    this.registerEvent(this.app.workspace.on('active-leaf-change', async (leaf) => {
+      const oldPath = this._lastFilePath;
+      const newPath = this._getActiveFilePath();
+
+      if (oldPath === newPath) return;
+      this._lastFilePath = newPath;
+      if (this.settings.styleMemory) {
+        if (oldPath) await this._savePageStyle(oldPath);
+        if (newPath) await this._restorePageStyle(newPath);
+      }
+      const popup = document.getElementById('ss-snippets-popup');
+      if (popup && popup._ssRenderContent) {
+        await new Promise(r => setTimeout(r, 200));
+
+        popup._ssRenderContent();
+      }
+    }));
+
     // 监听深浅模式切换，自动重新应用护眼色
     this._modeObserver = new MutationObserver(() => {
       if (this.settings.eyeCareColor) {
@@ -253,6 +295,9 @@ class SwiftSwitchPlugin extends Plugin {
       floatingButton: null, // { text, css, position: {x, y} } or null
       eyeCareColor: '',     // preset key: '' | 'cream' | 'green' | 'yellow' | 'mint' | 'beige' | 'sepia'
       popupPosition: null,  // { left, top } or null
+      styleMemory: false,   // 记忆模式开关
+      pageStyles: {},       // { filePath: { theme, isDark, eyeCareColor, enabledSnippets } }
+      exclusiveGroups: ['标题'], // 互斥分组名列表，同组 snippet 不能同时开启
     }, data);
   }
 
@@ -263,18 +308,23 @@ class SwiftSwitchPlugin extends Plugin {
   // ─── 读取 snippet 列表 ─────────────────────────────────────────────────
   async getSnippetInfo() {
     let enabledSnippets = [];
-    try {
-      const appearancePath = nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'appearance.json');
-      const appearance = JSON.parse(nodeFs.readFileSync(appearancePath, 'utf-8'));
-      enabledSnippets = appearance.enabledCssSnippets || [];
-    } catch (_e) {
+    if (this._enabledSnippetsCache) {
+      enabledSnippets = [...this._enabledSnippetsCache];
+    } else {
       try {
         const cc = this.app.customCss;
         if (cc && Array.isArray(cc.enabledCssSnippets)) {
           enabledSnippets = [...cc.enabledCssSnippets];
         }
-      } catch (_e2) {
-        enabledSnippets = [];
+      } catch (_e) {}
+      if (enabledSnippets.length === 0) {
+        try {
+          const appearancePath = nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'appearance.json');
+          const appearance = JSON.parse(nodeFs.readFileSync(appearancePath, 'utf-8'));
+          enabledSnippets = appearance.enabledCssSnippets || [];
+        } catch (_e) {
+          enabledSnippets = [];
+        }
       }
     }
 
@@ -290,6 +340,7 @@ class SwiftSwitchPlugin extends Plugin {
       snippetFiles = [];
     }
 
+    this._enabledSnippetsCache = [...enabledSnippets];
     return { enabledSnippets, snippetFiles };
   }
 
@@ -1164,11 +1215,91 @@ class SwiftSwitchPlugin extends Plugin {
     setTimeout(() => textInput.focus(), 50);
   }
 
-  // ─── 切换 snippet ──────────────────────────────────────────────────────
-  async toggleSnippet(snippetName, enable) {
+  // ─── 获取当前活动文件路径 ──────────────────────────────────────────────
+  _getActiveFilePath() {
+    const leaf = this.app.workspace.activeLeaf;
+    if (!leaf) return null;
+    const file = leaf.view?.file;
+    return file ? file.path : null;
+  }
+
+  // ─── 捕获当前风格 ──────────────────────────────────────────────────────
+  async _captureCurrentStyle() {
+    const { currentTheme } = await this.getThemeInfo();
+    const isDark = document.body.classList.contains('theme-dark');
+    const { enabledSnippets } = await this.getSnippetInfo();
+    return {
+      theme: currentTheme || '',
+      isDark,
+      eyeCareColor: this.settings.eyeCareColor || '',
+      enabledSnippets: [...enabledSnippets],
+    };
+  }
+
+  // ─── 保存当前页面风格 ──────────────────────────────────────────────────
+  async _savePageStyle(filePath) {
+    if (!filePath || !this.settings.styleMemory) return;
+    const style = await this._captureCurrentStyle();
+
+    this.settings.pageStyles[filePath] = style;
+    await this.saveSettings();
+  }
+
+  // ─── 恢复页面风格 ──────────────────────────────────────────────────────
+  async _restorePageStyle(filePath) {
+    if (!filePath || !this.settings.styleMemory) return;
+    const profile = this.settings.pageStyles[filePath];
+
+    if (!profile) return;
+    try {
+      if (profile.theme !== undefined) {
+        await this.switchTheme(profile.theme);
+      }
+      if (profile.isDark !== undefined) {
+        const currentIsDark = document.body.classList.contains('theme-dark');
+        if (currentIsDark !== profile.isDark) {
+          await this.toggleMode();
+        }
+      }
+      if (profile.eyeCareColor !== undefined) {
+        this.settings.eyeCareColor = profile.eyeCareColor;
+        this.applyEyeCareColor();
+        await this.saveSettings();
+      }
+      if (profile.enabledSnippets && Array.isArray(profile.enabledSnippets)) {
+        const { snippetFiles } = await this.getSnippetInfo();
+        for (const name of snippetFiles) {
+          const shouldBeEnabled = profile.enabledSnippets.includes(name);
+
+          this._setSnippetEnabled(name, shouldBeEnabled);
+        }
+      }
+      new Notice(t('styleMemory.restored'));
+    } catch (_e) {
+      new Notice(t('styleMemory.restoreFailed'));
+    }
+  }
+
+  // ─── 切换 snippet 状态（带缓存同步）──────────────────────────────────────
+  _setSnippetEnabled(snippetName, enable) {
     const cc = this.app.customCss;
     if (cc && typeof cc.setCssEnabledStatus === 'function') {
       cc.setCssEnabledStatus(snippetName, enable);
+    }
+    if (this._enabledSnippetsCache) {
+      if (enable && !this._enabledSnippetsCache.includes(snippetName)) {
+        this._enabledSnippetsCache.push(snippetName);
+      } else if (!enable) {
+        this._enabledSnippetsCache = this._enabledSnippetsCache.filter(n => n !== snippetName);
+      }
+    }
+  }
+
+  // ─── 切换 snippet ──────────────────────────────────────────────────────
+  async toggleSnippet(snippetName, enable) {
+    this._setSnippetEnabled(snippetName, enable);
+    const cc = this.app.customCss;
+    if (cc && typeof cc.setCssEnabledStatus === 'function') {
       return;
     }
     let appData = {};
@@ -1227,12 +1358,22 @@ class SwiftSwitchPlugin extends Plugin {
 
     const overlay = document.createElement('div');
     overlay.id = 'ss-snippets-overlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;';
-    overlay.addEventListener('click', () => {
-      this.settings.popupPosition = { left: popup.style.left, top: popup.style.top };
-      this.saveSettings();
-      popup.remove(); overlay.remove();
-    });
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;pointer-events:none;';
+    setTimeout(() => {
+      document.addEventListener('click', function overlayClick(e) {
+        if (!document.getElementById('ss-snippets-popup')) {
+          document.removeEventListener('click', overlayClick);
+          return;
+        }
+        if (popup.contains(e.target)) return;
+        const higherZ = document.querySelector('[style*="z-index:1000"], [style*="z-index: 1000"]');
+        if (higherZ && !popup.contains(higherZ)) return;
+        this.settings.popupPosition = { left: popup.style.left, top: popup.style.top };
+        this.saveSettings();
+        popup.remove(); overlay.remove();
+        document.removeEventListener('click', overlayClick);
+      }.bind(this));
+    }, 0);
 
     const popup = document.createElement('div');
     popup.id = 'ss-snippets-popup';
@@ -1241,7 +1382,7 @@ class SwiftSwitchPlugin extends Plugin {
       background:rgba(var(--mono-rgb-0),0.75);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);
       border:1px solid rgba(255,255,255,0.12);border-radius:12px;
       box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;
-      padding:16px 20px;min-width:360px;max-width:560px;max-height:75vh;overflow-y:auto;
+      padding:16px 20px;min-width:360px;max-width:560px;max-height:75vh;overflow-y:auto;scrollbar-gutter:stable;
     `;
     // 用整数像素居中，避免 transform 亚像素导致模糊
     if (restoreLeft && restoreTop) {
@@ -1294,26 +1435,9 @@ class SwiftSwitchPlugin extends Plugin {
     title.style.cssText = 'margin:0;font-size:15px;color:var(--text-normal);';
 
     const versionTag = leftHeader.createEl('span');
-     versionTag.textContent = 'v1.0.4';
+     versionTag.textContent = 'v1.0.5';
     versionTag.style.cssText = 'font-size:10px;color:var(--text-faint);margin-left:2px;align-self:flex-end;margin-bottom:2px;';
 
-    const pinBtn = leftHeader.createEl('span');
-    pinBtn.textContent = '📌';
-    pinBtn.style.cssText = 'cursor:pointer;font-size:14px;opacity:0.7;transition:opacity 0.15s ease;';
-    pinBtn.title = t('float.edit');
-    pinBtn.addEventListener('mouseenter', () => { pinBtn.style.opacity = '1'; });
-    pinBtn.addEventListener('mouseleave', () => { pinBtn.style.opacity = '0.7'; });
-    pinBtn.addEventListener('click', () => {
-      if (!this.settings.floatingButton) {
-        this.settings.floatingButton = {
-          text: t('float.defaultText'),
-          css: '',
-          position: { x: window.innerWidth - 80, y: 100 },
-        };
-        this.saveSettings();
-      }
-      this.createFloatingButton();
-    });
 
     const closeBtn = header.createEl('span');
     closeBtn.textContent = '✕';
@@ -1354,39 +1478,153 @@ class SwiftSwitchPlugin extends Plugin {
       themeArea.empty();
       const { currentTheme, themeDirs } = await this.getThemeInfo();
 
-      // 主题标签行 + 深浅模式开关
+      // 主题标签行 + 记忆模式 + 深浅模式开关
       const themeHeaderRow = themeArea.createDiv();
       themeHeaderRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;';
 
       const themeLabel = themeHeaderRow.createEl('div', { text: t('theme.section') });
       themeLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);';
 
+      const rightControls = themeHeaderRow.createDiv();
+      rightControls.style.cssText = 'display:flex;align-items:center;gap:6px;';
+
       // 深浅模式切换开关
       const isDark = document.body.classList.contains('theme-dark');
-      const modeSwitch = themeHeaderRow.createDiv();
-      modeSwitch.style.cssText = `
-        display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;
-        padding:2px 8px;border-radius:10px;font-size:11px;
-        border:1px solid var(--background-modifier-border);
-        background:rgba(var(--mono-rgb-0),0.5);
-        transition:all 0.2s ease;
+
+      // 记忆模式 chip（深浅模式左边）
+      const memChip = rightControls.createEl('span');
+      const memActive = this.settings.styleMemory;
+      memChip.textContent = t('styleMemory.chip');
+      memChip.title = t('styleMemory.hint');
+      memChip.style.cssText = `
+        display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;cursor:pointer;
+        user-select:none;transition:all 0.2s ease;
+        border:1px solid ${memActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
+        background:${memActive ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)'};
+        color:${memActive ? '#fff' : 'var(--text-muted)'};
+        ${memActive ? 'box-shadow:0 0 6px rgba(var(--interactive-accent-rgb),0.4);' : ''}
       `;
-      const modeIcon = modeSwitch.createEl('span');
-      modeIcon.textContent = isDark ? '🌙' : '☀️';
-      modeIcon.style.cssText = 'font-size:12px;transition:transform 0.3s ease;';
-      const modeText = modeSwitch.createEl('span');
-      modeText.textContent = isDark ? t('mode.dark') : t('mode.light');
-      modeText.style.cssText = 'color:var(--text-muted);';
+      memChip.addEventListener('click', async () => {
+        this.settings.styleMemory = !this.settings.styleMemory;
+        await this.saveSettings();
+        const on = this.settings.styleMemory;
+        memChip.style.borderColor = on ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+        memChip.style.background = on ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)';
+        memChip.style.color = on ? '#fff' : 'var(--text-muted)';
+        memChip.style.boxShadow = on ? '0 0 6px rgba(var(--interactive-accent-rgb),0.4)' : '';
+        new Notice(on ? t('styleMemory.on') : t('styleMemory.off'));
+      });
+
+      const modeSwitch = rightControls.createDiv();
+      modeSwitch.style.cssText = `
+        display:inline-flex;align-items:center;justify-content:center;
+        width:18px;height:18px;border-radius:50%;cursor:pointer;user-select:none;
+        transition:all 0.15s ease;touch-action:none;position:relative;
+        background:${isDark ? 'linear-gradient(135deg,#ff9a3c,#ffe44d)' : 'linear-gradient(135deg,#c8c8c8,#e8e8e8)'};
+        box-shadow:${isDark ? '0 2px 8px rgba(255,154,60,0.3)' : '0 2px 6px rgba(0,0,0,0.1)'};
+        opacity:0.85;
+      `;
+      modeSwitch.addEventListener('mouseenter', () => { modeSwitch.style.opacity = '1'; });
+      modeSwitch.addEventListener('mouseleave', () => { modeSwitch.style.opacity = '0.85'; });
+
+      // 拉绳（绝对定位在按钮正下方）
+      const pullCordEl = modeSwitch.createEl('div');
+      pullCordEl.style.cssText = `
+        position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:2px;
+        display:flex;flex-direction:column;align-items:center;cursor:ns-resize;
+        user-select:none;opacity:0.6;transition:opacity 0.2s ease;
+        touch-action:none;z-index:1;
+      `;
+      const cordLine = pullCordEl.createEl('div');
+      cordLine.style.cssText = `
+        width:2px;height:14px;
+        background:linear-gradient(to bottom,var(--text-faint),var(--text-muted));
+        border-radius:1px;transition:height 0.15s ease;
+      `;
+      const cordKnob = pullCordEl.createEl('div');
+      cordKnob.style.cssText = `
+        width:6px;height:6px;border-radius:50%;
+        background:radial-gradient(circle at 35% 35%,var(--text-normal),var(--text-muted));
+        box-shadow:0 1px 3px rgba(0,0,0,0.3);
+        transition:transform 0.15s ease,box-shadow 0.15s ease;
+      `;
+      pullCordEl.addEventListener('mouseenter', () => { pullCordEl.style.opacity = '1'; modeSwitch.style.opacity = '1'; });
+      pullCordEl.addEventListener('mouseleave', () => { if (!pullDragging) pullCordEl.style.opacity = '0.6'; });
+
+      let pullDragging = false;
+      let pullStartY = 0;
+      const pullThreshold = 20;
+      pullCordEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        pullDragging = true;
+        pullStartY = e.clientY;
+        cordLine.style.transition = 'none';
+        cordKnob.style.transition = 'none';
+      });
+      const onPopupPullMove = (e) => {
+        if (!pullDragging) return;
+        e.preventDefault();
+        const dy = e.clientY - pullStartY;
+        cordLine.style.height = Math.max(8, 14 + dy) + 'px';
+        const scale = 1 + Math.min(dy / pullThreshold, 0.4);
+        cordKnob.style.transform = `scale(${scale})`;
+        cordKnob.style.boxShadow = dy > pullThreshold * 0.6
+          ? '0 2px 6px rgba(0,0,0,0.4), 0 0 4px var(--interactive-accent)'
+          : '0 1px 3px rgba(0,0,0,0.3)';
+      };
+      const onPopupPullEnd = async (e) => {
+        if (!pullDragging) return;
+        pullDragging = false;
+        const dy = e.clientY - pullStartY;
+        cordLine.style.transition = 'height 0.3s cubic-bezier(0.34,1.56,0.64,1)';
+        cordKnob.style.transition = 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1)';
+        cordLine.style.height = '14px';
+        cordKnob.style.transform = 'scale(1)';
+        cordKnob.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+        if (dy > pullThreshold) {
+          cordKnob.style.background = 'radial-gradient(circle at 35% 35%,var(--interactive-accent),var(--text-muted))';
+          setTimeout(() => {
+            cordKnob.style.background = 'radial-gradient(circle at 35% 35%,var(--text-normal),var(--text-muted))';
+          }, 400);
+          await this.toggleMode();
+          renderThemes();
+        }
+      };
+      document.addEventListener('mousemove', onPopupPullMove);
+      document.addEventListener('mouseup', onPopupPullEnd);
+
+      // 点击按钮：显示/隐藏悬浮按钮
       modeSwitch.addEventListener('click', async () => {
-        modeIcon.style.transform = 'rotate(360deg)';
-        await this.toggleMode();
-        renderThemes();
-      });
-      modeSwitch.addEventListener('mouseenter', () => {
-        modeSwitch.style.borderColor = 'var(--interactive-accent)';
-      });
-      modeSwitch.addEventListener('mouseleave', () => {
-        modeSwitch.style.borderColor = 'var(--background-modifier-border)';
+        if (this.settings.floatingButton) {
+          const existing = document.getElementById('ss-floating-button');
+          if (existing) {
+            if (existing._ssResizeHandler) window.removeEventListener('resize', existing._ssResizeHandler);
+            if (existing._ssCleanup) existing._ssCleanup();
+            existing.remove();
+            const pc = document.getElementById('ss-pull-cord');
+            if (pc) pc.remove();
+            const styleEl = document.getElementById('ss-float-custom-style');
+            if (styleEl) styleEl.remove();
+          }
+          this.settings.floatingButton = null;
+          await this.saveSettings();
+        } else {
+          const popupEl = document.getElementById('ss-snippets-popup');
+          let fbX = window.innerWidth - 80;
+          if (popupEl) {
+            const rect = popupEl.getBoundingClientRect();
+            fbX = rect.right + 50;
+            if (fbX > window.innerWidth - 80) fbX = window.innerWidth - 80;
+          }
+          this.settings.floatingButton = {
+            text: t('float.defaultText'),
+            css: '',
+            position: { x: fbX, y: 100 },
+          };
+          await this.saveSettings();
+          this.createFloatingButton();
+        }
       });
 
       if (themeDirs.length === 0) {
@@ -1604,6 +1842,7 @@ class SwiftSwitchPlugin extends Plugin {
     this._dragData = null;
 
     const renderContent = async () => {
+      popup._ssRenderContent = renderContent;
       contentArea.empty();
       const { enabledSnippets, snippetFiles } = await this.getSnippetInfo();
 
@@ -1648,6 +1887,29 @@ class SwiftSwitchPlugin extends Plugin {
         const groupLabel = groupHeader.createEl('span');
         groupLabel.textContent = gName + ' (' + members.length + ')';
         groupLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);cursor:pointer;';
+
+        const isExclusive = this.settings.exclusiveGroups && this.settings.exclusiveGroups.includes(gName);
+        const exclBtn = groupHeader.createEl('span');
+        exclBtn.textContent = '⊘';
+        exclBtn.title = isExclusive ? t('group.exclusive') + ' — ' + t('group.exclusive.hint') : t('group.exclusive');
+        exclBtn.style.cssText = `
+          font-size:14px;cursor:pointer;user-select:none;transition:all 0.2s ease;
+          color:${isExclusive ? 'var(--interactive-accent)' : 'var(--text-faint)'};
+          ${isExclusive ? 'text-shadow:0 0 6px rgba(var(--interactive-accent-rgb),0.5);' : ''}
+        `;
+        exclBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!this.settings.exclusiveGroups) this.settings.exclusiveGroups = [];
+          if (isExclusive) {
+            this.settings.exclusiveGroups = this.settings.exclusiveGroups.filter(g => g !== gName);
+            new Notice(t('group.exclusive.off'));
+          } else {
+            this.settings.exclusiveGroups.push(gName);
+            new Notice(t('group.exclusive.on'));
+          }
+          await this.saveSettings();
+          renderContent();
+        });
 
         // 分组右键菜单（重命名、删除）
         groupHeader.addEventListener('contextmenu', (e) => {
@@ -1985,6 +2247,21 @@ class SwiftSwitchPlugin extends Plugin {
       }
     });
 
+    // 互斥分组
+    const isExclusive = this.settings.exclusiveGroups && this.settings.exclusiveGroups.includes(groupName);
+    mkItem((isExclusive ? '✓ ' : '') + t('group.exclusive'), async () => {
+      if (!this.settings.exclusiveGroups) this.settings.exclusiveGroups = [];
+      if (isExclusive) {
+        this.settings.exclusiveGroups = this.settings.exclusiveGroups.filter(g => g !== groupName);
+        new Notice(t('group.exclusive.off'));
+      } else {
+        this.settings.exclusiveGroups.push(groupName);
+        new Notice(t('group.exclusive.on'));
+      }
+      await this.saveSettings();
+      rerender();
+    });
+
     // 删除分组（snippets 回到未分组）
     mkItem(t('context.deleteGroup'), async () => {
       delete this.settings.groups[groupName];
@@ -2007,6 +2284,8 @@ class SwiftSwitchPlugin extends Plugin {
     chip.setAttribute('draggable', 'true');
     chip.setAttribute('data-snippet', snippetName);
 
+    const isExclusive = currentGroup && this.settings.exclusiveGroups && this.settings.exclusiveGroups.includes(currentGroup);
+
     const applyStyle = (en) => {
       chip.style.cssText = `
         display:inline-block;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;
@@ -2014,23 +2293,31 @@ class SwiftSwitchPlugin extends Plugin {
         border:1px solid ${en ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
         background:${en ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)'};
         color:${en ? '#fff' : 'var(--text-muted)'};
+        ${isExclusive ? 'border-style:dashed;' : ''}
       `;
-      chip.title = snippetName + (en ? ' (' + t('snippet.enabled') + ')' : ' (' + t('snippet.disabled') + ')');
+      chip.title = snippetName + (en ? ' (' + t('snippet.enabled') + ')' : ' (' + t('snippet.disabled') + ')') + (isExclusive ? ' [' + t('group.exclusive') + ']' : '');
     };
     applyStyle(isEnabled);
 
     let chipEnabled = isEnabled;
-    chip.addEventListener('click', (e) => {
+    chip.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const cc = this.app.customCss;
-      if (cc && typeof cc.setCssEnabledStatus === 'function') {
-        cc.setCssEnabledStatus(snippetName, !chipEnabled);
-      } else {
-        this.toggleSnippet(snippetName, !chipEnabled);
+
+      if (!chipEnabled && isExclusive) {
+        const members = this.settings.groups[currentGroup] || [];
+
+        for (const name of members) {
+          if (name !== snippetName) {
+            this._setSnippetEnabled(name, false);
+          }
+        }
       }
+      this._setSnippetEnabled(snippetName, !chipEnabled);
+
       chipEnabled = !chipEnabled;
       applyStyle(chipEnabled);
       new Notice(snippetName + ' ' + t('snippet.toggled'));
+      if (isExclusive) setTimeout(() => rerender(), 50);
     });
 
     // 右键菜单
@@ -2103,9 +2390,8 @@ class SwiftSwitchPlugin extends Plugin {
       // 删除
       mkItem(t('context.delete'), async () => {
         if (confirm(t('context.delete') + ' "' + snippetName + '"?')) {
-          const cc = this.app.customCss;
-          if (chipEnabled && cc && typeof cc.setCssEnabledStatus === 'function') {
-            cc.setCssEnabledStatus(snippetName, false);
+          if (chipEnabled) {
+            this._setSnippetEnabled(snippetName, false);
           }
           const snippetPath = '.obsidian/snippets/' + snippetName + '.css';
           const jsSnippetPath = '.obsidian/snippets/' + snippetName + '.js';
@@ -2209,10 +2495,7 @@ class SwiftSwitchPlugin extends Plugin {
       if (!title) return;
       try {
         await this.app.vault.adapter.write('.obsidian/snippets/' + title + '.css', css || '/* ' + title + ' */\n');
-        const cc = this.app.customCss;
-        if (cc && typeof cc.setCssEnabledStatus === 'function') {
-          cc.setCssEnabledStatus(title, true);
-        }
+        this._setSnippetEnabled(title, true);
         new Notice(t('snippet.added'));
         form.remove();
         rerender();

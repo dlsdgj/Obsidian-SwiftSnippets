@@ -1,4 +1,13 @@
-## 🆕 v1.0.4 (2026-06-19)
+## 🆕 v1.0.5 (2026-06-20)
+
+- **Page Style Memory / 页面风格记忆** — Remember each page's theme, dark/light mode, eye care color, and enabled snippets; auto-restore on page switch / 记住每个页面的主题、深浅模式、护眼色和已启用 Snippet，切换页面时自动恢复
+- **Exclusive Groups / 互斥分组** — Snippets in exclusive groups (e.g. "标题") cannot be enabled simultaneously; toggle via group header ⊘ button or right-click menu / 互斥分组中的 Snippet 不能同时开启，通过分组头 ⊘ 按钮或右键菜单切换
+- **Floating Button Toggle / 悬浮按钮切换** — Dark/light indicator button in popup now toggles floating button visibility; pull cord switches dark/light mode / 面板深浅指示按钮点击切换悬浮按钮显隐，拉绳切换深浅模式
+- **Popup Scroll-through / 面板滚轮穿透** — Mouse wheel events pass through the popup overlay to the page beneath / 滚轮事件穿透面板传递到下方页面
+- **Stable Scrollbar / 稳定滚动条** — Popup uses scrollbar-gutter: stable to prevent chip reflow / 面板使用 scrollbar-gutter 防止滚动条出现时 chip 重排
+- **Snippet Cache / Snippet 缓存** — In-memory cache for snippet enabled state, fixing stale chip status after toggling / 内存缓存 Snippet 启用状态，修复切换后 chip 状态延迟问题
+
+## v1.0.4 (2026-06-19)
 
 - **Meditation Breathing / 冥想呼吸** — Added 4-7-8 breathing (inhale 4s-hold 7s-exhale 8s) and Box breathing (4-4-4-4) guided visual animations / 新增4-7-8呼吸法和方块呼吸引导动画
 - **Edge Glow / 边缘呼吸** — Screen edge glow breathing effect via box-shadow overlay / 屏幕四周光晕明暗呼吸
