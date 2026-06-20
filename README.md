@@ -1,4 +1,7 @@
 # SwiftSwitch
+https://www.bilibili.com/video/BV17Ujk6tEZQ
+
+https://www.bilibili.com/video/BV16Njy6vEdr
 
 Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
