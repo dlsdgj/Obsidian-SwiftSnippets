@@ -1,4 +1,12 @@
-## 🆕 v1.0.7 (2026-06-22)
+## 🆕 v1.0.8 (2026-06-22)
+
+- **Status Bar Editable / 状态栏按钮可编辑** — Right-click status bar button to edit text and CSS style, with live preview / 右键状态栏按钮可修改文字和CSS样式，带实时预览
+- **Context Menu Overflow Fix / 右键菜单溢出修复** — Status bar right-click menu auto-adjusts position to stay within screen / 状态栏右键菜单自动修正位置防止溢出屏幕
+- **Version Auto-Read / 版本号自动读取** — Popup version tag now reads from manifest instead of hardcoded value / 管理面板版本号从 manifest 自动读取，不再硬编码
+- **Snippet Edit Error Handling / 编辑错误处理** — Failed to read snippet file now shows Notice with details instead of silent empty form / 读取snippet文件失败时显示Notice提示，不再静默打开空表单
+- **Debug Console Logs / 调试日志** — Added console logging for snippet edit file read operations / 添加snippet编辑文件读取的控制台日志
+
+## v1.0.7 (2026-06-22)
 
 - **Image Background / 图片背景** — Support local image backgrounds from `pic` folder; auto-detected and displayed as pill-shaped chips / 支持本地图片背景，自动检测 `pic` 文件夹并以药丸形 chip 显示
 - **Tile Mode / 平铺模式** — Added "Tile" option for image backgrounds to repeat small images instead of cover / 图片背景新增"平铺"选项，小图重复排列而非铺满

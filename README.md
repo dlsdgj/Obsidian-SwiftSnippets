@@ -50,6 +50,14 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 <details>
 <summary>Changelog</summary>
 
+### v1.0.8 (2026-06-22)
+
+- **Status Bar Editable** — Right-click status bar button to edit text and CSS style, with live preview
+- **Context Menu Overflow Fix** — Status bar right-click menu auto-adjusts position to stay within screen
+- **Version Auto-Read** — Popup version tag now reads from manifest instead of hardcoded value
+- **Snippet Edit Error Handling** — Failed to read snippet file now shows Notice with details instead of silent empty form
+- **Debug Console Logs** — Added console logging for snippet edit file read operations
+
 ### v1.0.7 (2026-06-22)
 
 - **Image Background** — Support local image backgrounds from `pic` folder; auto-detected and displayed as pill-shaped chips

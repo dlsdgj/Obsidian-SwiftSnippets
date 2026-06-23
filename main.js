@@ -49,6 +49,11 @@ const i18n = {
     'float.editStyle': '按钮样式 (CSS)',
     'float.close': '关闭',
     'float.defaultText': ' ',
+    'statusBar.edit': '编辑',
+    'statusBar.editTitle': '编辑状态栏按钮',
+    'statusBar.editText': '按钮文字',
+    'statusBar.editStyle': '按钮样式 (CSS)',
+    'statusBar.defaultText': 'SwiftSwitch',
     'mode.dark': '深色',
     'mode.light': '浅色',
     'mode.switched': '模式已切换',
@@ -143,6 +148,11 @@ const i18n = {
     'float.editStyle': 'Button Style (CSS)',
     'float.close': 'Close',
     'float.defaultText': ' ',
+    'statusBar.edit': 'Edit',
+    'statusBar.editTitle': 'Edit Status Bar Button',
+    'statusBar.editText': 'Button Text',
+    'statusBar.editStyle': 'Button Style (CSS)',
+    'statusBar.defaultText': 'SwiftSwitch',
     'mode.dark': 'Dark',
     'mode.light': 'Light',
     'mode.switched': 'Mode switched',
@@ -217,7 +227,15 @@ class SwiftSwitchPlugin extends Plugin {
     this._statusBarEl.title = t('popup.title');
     this._statusBarEl.style.cursor = 'pointer';
     this._statusBarEl.style.opacity = '0.8';
+    this._applyStatusBarStyle();
     this._statusBarEl.addEventListener('click', () => this.openSnippetsPopup());
+
+    // 右键编辑状态栏按钮
+    this._statusBarEl.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._showStatusBarContextMenu(e);
+    });
 
     // 滚轮切换主题
     this._statusBarEl.addEventListener('wheel', async (e) => {
@@ -317,6 +335,7 @@ class SwiftSwitchPlugin extends Plugin {
       groupOrder: [],      // [groupName, ...] 维护分组顺序
       collapsedGroups: {}, // { groupName: true/false, ... }
       floatingButton: null, // { text, css, position: {x, y} } or null
+      statusBarButton: null, // { text, css } or null
       eyeCareColor: '',     // preset key: '' | 'cream' | 'green' | 'yellow' | 'mint' | 'beige' | 'sepia' | '__img_0' | '__img_1' ...
       bgImages: [],         // [{ type: 'local', url: '...', label: '...', opacity: 0.3 }, ...]
       popupPosition: null,  // { left, top } or null
@@ -1429,6 +1448,226 @@ class SwiftSwitchPlugin extends Plugin {
     setTimeout(() => textInput.focus(), 50);
   }
 
+  // ─── 状态栏按钮样式应用 ──────────────────────────────────────────────
+  _applyStatusBarStyle() {
+    const sb = this.settings.statusBarButton;
+    const el = this._statusBarEl;
+    if (!el) return;
+
+    // 移除旧自定义样式
+    const oldStyle = document.getElementById('ss-statusbar-custom-style');
+    if (oldStyle) oldStyle.remove();
+
+    // 重置为默认
+    el.setText('SwiftSwitch');
+    el.title = t('popup.title');
+    el.style.cursor = 'pointer';
+    el.style.opacity = '0.8';
+    el.className = el.className.replace(/\bss-statusbar-\S+/g, '').trim();
+
+    if (!sb) return;
+
+    // 自定义文字
+    if (sb.text) {
+      el.setText(sb.text);
+    }
+
+    // 自定义CSS
+    if (sb.css && sb.css.trim()) {
+      const classMatch = sb.css.match(/\.([a-zA-Z_\u4e00-\u9fff][\w\u4e00-\u9fff-]*)/);
+      if (classMatch) {
+        const rawClassName = classMatch[1];
+        const scopedClassName = `ss-statusbar-${rawClassName}`;
+        const escapedRaw = rawClassName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const scopedCss = sb.css.replace(
+          new RegExp(`\\.${escapedRaw}`, 'g'),
+          `.${scopedClassName}`
+        );
+        const styleEl = document.createElement('style');
+        styleEl.id = 'ss-statusbar-custom-style';
+        styleEl.textContent = scopedCss;
+        document.head.appendChild(styleEl);
+        el.classList.add(scopedClassName);
+      }
+    }
+  }
+
+  // ─── 状态栏按钮右键菜单 ──────────────────────────────────────────────
+  _showStatusBarContextMenu(e) {
+    const menu = document.createElement('div');
+    menu.style.cssText = `
+      position:fixed;z-index:10001;background:var(--background-secondary);
+      border:1px solid var(--background-modifier-border);border-radius:6px;
+      box-shadow:0 4px 16px rgba(0,0,0,0.25);padding:4px 0;min-width:120px;
+    `;
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+
+    const mkItem = (label, action) => {
+      const item = document.createElement('div');
+      item.textContent = label;
+      item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);';
+      item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
+      item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+      item.addEventListener('click', async () => { menu.remove(); await action(); });
+      menu.appendChild(item);
+    };
+
+    mkItem(t('statusBar.edit'), () => this._showStatusBarEditForm());
+
+    if (this.settings.statusBarButton) {
+      mkItem(_currentLang === 'zh' ? '重置' : 'Reset', async () => {
+        this.settings.statusBarButton = null;
+        await this.saveSettings();
+        this._applyStatusBarStyle();
+      });
+    }
+
+    const closeMenu = (evt) => {
+      if (!menu.contains(evt.target)) { menu.remove(); document.removeEventListener('click', closeMenu); }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+
+    document.body.appendChild(menu);
+    // 修正位置防止溢出屏幕
+    requestAnimationFrame(() => {
+      const rect = menu.getBoundingClientRect();
+      let x = e.clientX, y = e.clientY;
+      if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 4;
+      if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 4;
+      if (x < 0) x = 4;
+      if (y < 0) y = 4;
+      menu.style.left = x + 'px';
+      menu.style.top = y + 'px';
+    });
+  }
+
+  // ─── 状态栏按钮编辑表单 ──────────────────────────────────────────────
+  _showStatusBarEditForm() {
+    const sb = this.settings.statusBarButton || { text: '', css: '' };
+
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:10002;';
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      position:fixed;
+      background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+      border:1px solid var(--background-modifier-border);border-radius:8px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.3);z-index:10003;
+      padding:16px 20px;min-width:360px;max-width:520px;max-height:80vh;overflow-y:auto;
+    `;
+    requestAnimationFrame(() => {
+      const w = dialog.offsetWidth, h = dialog.offsetHeight;
+      dialog.style.left = Math.round((window.innerWidth - w) / 2) + 'px';
+      dialog.style.top = Math.round((window.innerHeight - h) / 2) + 'px';
+    });
+
+    const label = dialog.createEl('div', { text: t('statusBar.editTitle') });
+    label.style.cssText = 'font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text-normal);';
+
+    const textLabel = dialog.createEl('div', { text: t('statusBar.editText') });
+    textLabel.style.cssText = 'font-size:12px;color:var(--text-muted);margin-bottom:4px;';
+
+    const textInput = dialog.createEl('input', { type: 'text' });
+    textInput.value = sb.text || t('statusBar.defaultText');
+    textInput.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);margin-bottom:10px;';
+
+    const cssLabel = dialog.createEl('div');
+    cssLabel.style.cssText = 'font-size:12px;color:var(--text-muted);margin-bottom:4px;display:flex;align-items:center;gap:6px;';
+    cssLabel.createEl('span', { text: t('statusBar.editStyle') });
+
+    const cssHint = dialog.createEl('div');
+    cssHint.textContent = _currentLang === 'zh' ? '支持完整CSS格式，含伪元素。类名会自动作用域化。' : 'Supports full CSS format including pseudo-elements. Class names are automatically scoped.';
+    cssHint.style.cssText = 'font-size:11px;color:var(--text-faint);margin-bottom:4px;';
+
+    const cssInput = dialog.createEl('textarea');
+    cssInput.value = sb.css || '';
+    cssInput.placeholder = `.ss-statusbar-style {\n  background: linear-gradient(90deg, #ff9a3c, #ffe44d);\n  color: #5c2e00;\n  border-radius: 14px;\n  padding: 2px 8px;\n}`;
+    cssInput.style.cssText = 'width:100%;height:140px;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;font-family:monospace;font-size:11px;resize:vertical;background:var(--background-primary);color:var(--text-normal);margin-bottom:10px;';
+
+    // 预览区域
+    const previewDiv = dialog.createDiv();
+    previewDiv.style.cssText = 'margin-bottom:12px;padding:12px;border:1px dashed var(--background-modifier-border);border-radius:6px;text-align:center;';
+
+    const previewLabel = previewDiv.createEl('div', { text: _currentLang === 'zh' ? '预览:' : 'Preview:' });
+    previewLabel.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:8px;';
+
+    const previewSpan = previewDiv.createEl('span');
+    previewSpan.textContent = sb.text || t('statusBar.defaultText');
+    previewSpan.style.cssText = 'display:inline-block;padding:2px 4px;font-size:12px;';
+
+    const previewStyleId = 'ss-statusbar-preview-style';
+
+    const updatePreview = () => {
+      const newLabel = textInput.value.trim() || t('statusBar.defaultText');
+      const newCss = cssInput.value.trim();
+      previewSpan.textContent = newLabel;
+      previewSpan.className = '';
+      previewSpan.style.cssText = 'display:inline-block;padding:2px 4px;font-size:12px;';
+
+      const oldPreviewStyle = document.getElementById(previewStyleId);
+      if (oldPreviewStyle) oldPreviewStyle.remove();
+
+      if (newCss) {
+        const classMatch = newCss.match(/\.([a-zA-Z_\u4e00-\u9fff][\w\u4e00-\u9fff-]*)/);
+        if (classMatch) {
+          const rawClassName = classMatch[1];
+          const scopedClassName = `ss-statusbar-${rawClassName}`;
+          const escapedRaw = rawClassName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const scopedCss = newCss.replace(
+            new RegExp(`\\.${escapedRaw}`, 'g'),
+            `.${scopedClassName}`
+          );
+          const styleEl = document.createElement('style');
+          styleEl.id = previewStyleId;
+          styleEl.textContent = scopedCss;
+          document.head.appendChild(styleEl);
+          previewSpan.className = scopedClassName;
+        }
+      }
+    };
+
+    textInput.addEventListener('input', updatePreview);
+    cssInput.addEventListener('input', updatePreview);
+    updatePreview();
+
+    const btnRow = dialog.createDiv();
+    btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+
+    const cancelBtn = btnRow.createEl('button', { text: t('btn.cancel') });
+    cancelBtn.addEventListener('click', () => {
+      const previewStyle = document.getElementById(previewStyleId);
+      if (previewStyle) previewStyle.remove();
+      backdrop.remove(); dialog.remove();
+    });
+
+    const saveBtn = btnRow.createEl('button', { text: t('btn.save') });
+    saveBtn.style.cssText = 'background:var(--interactive-accent);color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;';
+    saveBtn.addEventListener('click', async () => {
+      this.settings.statusBarButton = {
+        text: textInput.value.trim() || t('statusBar.defaultText'),
+        css: cssInput.value.trim(),
+      };
+      await this.saveSettings();
+      this._applyStatusBarStyle();
+      const previewStyle = document.getElementById(previewStyleId);
+      if (previewStyle) previewStyle.remove();
+      backdrop.remove(); dialog.remove();
+    });
+
+    backdrop.addEventListener('click', () => {
+      const previewStyle = document.getElementById(previewStyleId);
+      if (previewStyle) previewStyle.remove();
+      backdrop.remove(); dialog.remove();
+    });
+
+    dialog.appendChild(btnRow);
+    document.body.appendChild(backdrop);
+    document.body.appendChild(dialog);
+    setTimeout(() => textInput.focus(), 50);
+  }
+
   // ─── 获取当前活动文件路径 ──────────────────────────────────────────────
   _getActiveFilePath() {
     const leaf = this.app.workspace.activeLeaf;
@@ -1650,7 +1889,7 @@ class SwiftSwitchPlugin extends Plugin {
     title.style.cssText = 'margin:0;font-size:15px;color:var(--text-normal);';
 
     const versionTag = leftHeader.createEl('span');
-     versionTag.textContent = 'v1.0.6';
+     versionTag.textContent = 'v' + (this.manifest?.version || '');
     versionTag.style.cssText = 'font-size:10px;color:var(--text-faint);margin-left:2px;align-self:flex-end;margin-bottom:2px;';
 
 
@@ -2696,15 +2935,28 @@ class SwiftSwitchPlugin extends Plugin {
 
       // 编辑
       mkItem(t('context.edit'), async () => {
+        const cssPath = '.obsidian/snippets/' + snippetName + '.css';
+        const jsPath = '.obsidian/snippets/' + snippetName + '.js';
+        let content = '', editPath = cssPath, readFailed = false;
+        console.log('[SwiftSnippets] Edit snippet:', snippetName, 'cssPath:', cssPath, 'jsPath:', jsPath);
         try {
-          const cssPath = '.obsidian/snippets/' + snippetName + '.css';
-          const jsPath = '.obsidian/snippets/' + snippetName + '.js';
-          let content = '', editPath = cssPath;
-          try { content = await this.app.vault.adapter.read(cssPath); } catch (_e) {
-            try { content = await this.app.vault.adapter.read(jsPath); editPath = jsPath; } catch (_e2) {}
+          content = await this.app.vault.adapter.read(cssPath);
+          console.log('[SwiftSnippets] Read CSS OK, length:', content.length);
+        } catch (_e) {
+          console.warn('[SwiftSnippets] Read CSS failed:', _e?.message || _e);
+          try {
+            content = await this.app.vault.adapter.read(jsPath);
+            editPath = jsPath;
+            console.log('[SwiftSnippets] Read JS OK, length:', content.length);
+          } catch (_e2) {
+            console.warn('[SwiftSnippets] Read JS failed:', _e2?.message || _e2);
+            readFailed = true;
           }
-          this._showEditForm(document.getElementById('ss-snippets-popup'), snippetName, content, editPath, rerender);
-        } catch (_e) { new Notice('Read failed'); }
+        }
+        if (readFailed) {
+          new Notice('[SwiftSnippets] ' + (_currentLang === 'zh' ? '读取文件失败，请检查控制台日志' : 'Failed to read file, check console for details'));
+        }
+        this._showEditForm(document.getElementById('ss-snippets-popup'), snippetName, content, editPath, rerender);
       });
 
       // 编辑(外部程序打开)
