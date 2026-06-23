@@ -2,10 +2,6 @@
 
 Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
-https://www.bilibili.com/video/BV17Ujk6tEZQ
-
-https://www.bilibili.com/video/BV16Njy6vEdr
-
 ![Demo](assets/demo.gif)
 
 ## Features
@@ -53,6 +49,15 @@ https://www.bilibili.com/video/BV16Njy6vEdr
 
 <details>
 <summary>Changelog</summary>
+
+### v1.0.7 (2026-06-22)
+
+- **Image Background** — Support local image backgrounds from `pic` folder; auto-detected and displayed as pill-shaped chips
+- **Tile Mode** — Added "Tile" option for image backgrounds to repeat small images instead of cover
+- **Opacity Control** — Inline opacity slider in title row when an image is selected
+- **Minimap Fix** — Fixed SwiftMatch minimap being displaced by image background CSS
+- **Plugin Dir Helper** — Added `_getPluginDir()` with fallback chain to fix image loading path issues
+- **Image Section Redesign** — New "背景-图片" title with "?" help tooltip; controls in title row, no duplicate display
 
 ### v1.0.6 (2026-06-20)
 

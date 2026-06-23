@@ -1,4 +1,13 @@
-## 🆕 v1.0.6 (2026-06-20)
+## 🆕 v1.0.7 (2026-06-22)
+
+- **Image Background / 图片背景** — Support local image backgrounds from `pic` folder; auto-detected and displayed as pill-shaped chips / 支持本地图片背景，自动检测 `pic` 文件夹并以药丸形 chip 显示
+- **Tile Mode / 平铺模式** — Added "Tile" option for image backgrounds to repeat small images instead of cover / 图片背景新增"平铺"选项，小图重复排列而非铺满
+- **Opacity Control / 透明度控制** — Inline opacity slider in title row when an image is selected / 选中图片时标题行内联透明度滑块
+- **Minimap Fix / 小地图修复** — Fixed SwiftMatch minimap being displaced by image background CSS / 修复图片背景 CSS 导致 SwiftMatch 小地图偏移
+- **Plugin Dir Helper / 插件目录辅助** — Added `_getPluginDir()` with fallback chain to fix image loading path issues / 新增 `_getPluginDir()` 多级回退修复图片加载路径问题
+- **Image Section Redesign / 图片区重设计** — New "背景-图片" title with "?" help tooltip; controls in title row, no duplicate display / 新增"背景-图片"标题及"?"提示；控件在标题行，不再重复显示
+
+## v1.0.6 (2026-06-20)
 
 - **Silent Page Switch / 静默页面切换** — No more notification popups when switching between pages with style memory / 切换页面时不再显示通知弹窗
 - **Popup Scroll-through Fix / 面板滚轮穿透修复** — Mouse wheel properly passes through popup overlay to scroll the page beneath / 滚轮事件正确穿透面板传递到下方页面

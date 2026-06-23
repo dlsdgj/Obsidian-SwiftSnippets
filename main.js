@@ -54,7 +54,7 @@ const i18n = {
     'mode.switched': '模式已切换',
     'mode.switchFailed': '切换模式失败',
     'pull.hint': '拉一下切换模式',
-    'eyeCare.section': '护眼色',
+    'eyeCare.section': '背景',
     'eyeCare.default': '默认',
     'eyeCare.cream': '奶油',
     'eyeCare.green': '豆绿',
@@ -67,6 +67,12 @@ const i18n = {
     'eyeCare.grid': '方格',
     'eyeCare.stripe': '条纹',
     'eyeCare.aurora': '极光',
+    'eyeCare.honeycomb': '蜂窝',
+    'eyeCare.waves': '水波',
+    'eyeCare.diamond': '菱格',
+    'eyeCare.noise': '噪点',
+    'eyeCare.paper': '宣纸',
+    'eyeCare.crosshatch': '交叉线',
     'eyeCare.breathe': '呼吸',
     'eyeCare.breathe478': '4-7-8呼吸',
     'eyeCare.breatheBox': '方块呼吸',
@@ -77,6 +83,11 @@ const i18n = {
     'eyeCare.breatheBox.hint': '吸气4秒-屏息4秒-呼气4秒-屏息4秒，均匀节奏',
     'eyeCare.edgeGlow.hint': '屏幕四周光晕明暗呼吸',
     'eyeCare.cursorGlow.hint': '跟随鼠标的光晕呼吸',
+    'eyeCare.imgRemove': '移除',
+    'eyeCare.imgOpacity': '透明度',
+    'eyeCare.imgTile': '平铺',
+    'eyeCare.imgTitle': '背景-图片',
+    'eyeCare.imgHelp': '将图片文件放入 .obsidian\\plugins\\SwiftSnippets\\pic\\',
     'styleMemory.chip': '记忆模式',
     'styleMemory.hint': '记忆模式：记住每个页面的风格，切换时自动恢复',
     'styleMemory.on': '记忆模式已开启',
@@ -137,7 +148,7 @@ const i18n = {
     'mode.switched': 'Mode switched',
     'mode.switchFailed': 'Failed to switch mode',
     'pull.hint': 'Pull to switch mode',
-    'eyeCare.section': 'Eye Care',
+    'eyeCare.section': 'Background',
     'eyeCare.default': 'Default',
     'eyeCare.cream': 'Cream',
     'eyeCare.green': 'Green',
@@ -150,6 +161,12 @@ const i18n = {
     'eyeCare.grid': 'Grid',
     'eyeCare.stripe': 'Stripe',
     'eyeCare.aurora': 'Aurora',
+    'eyeCare.honeycomb': 'Honeycomb',
+    'eyeCare.waves': 'Waves',
+    'eyeCare.diamond': 'Diamond',
+    'eyeCare.noise': 'Noise',
+    'eyeCare.paper': 'Rice Paper',
+    'eyeCare.crosshatch': 'Crosshatch',
     'eyeCare.breathe': 'Breathe',
     'eyeCare.breathe478': '4-7-8 Breathe',
     'eyeCare.breatheBox': 'Box Breathe',
@@ -160,6 +177,11 @@ const i18n = {
     'eyeCare.breatheBox.hint': 'Inhale 4s - Hold 4s - Exhale 4s - Hold 4s, even rhythm',
     'eyeCare.edgeGlow.hint': 'Screen edge glow breathing',
     'eyeCare.cursorGlow.hint': 'Cursor-following glow breathing',
+    'eyeCare.imgRemove': 'Remove',
+    'eyeCare.imgOpacity': 'Opacity',
+    'eyeCare.imgTile': 'Tile',
+    'eyeCare.imgTitle': 'Background-Image',
+    'eyeCare.imgHelp': 'Put image files into .obsidian\\plugins\\SwiftSnippets\\pic\\',
     'styleMemory.chip': 'Memory Mode',
     'styleMemory.hint': 'Memory mode: remember each page style, auto-restore on switch',
     'styleMemory.on': 'Memory mode on',
@@ -224,6 +246,8 @@ class SwiftSwitchPlugin extends Plugin {
     if (this.settings.floatingButton) {
       this.createFloatingButton();
     }
+    // 自动创建 pic 文件夹并扫描图片
+    this._syncPicFolder();
     // 恢复护眼色
     if (this.settings.eyeCareColor) {
       this.applyEyeCareColor();
@@ -293,7 +317,8 @@ class SwiftSwitchPlugin extends Plugin {
       groupOrder: [],      // [groupName, ...] 维护分组顺序
       collapsedGroups: {}, // { groupName: true/false, ... }
       floatingButton: null, // { text, css, position: {x, y} } or null
-      eyeCareColor: '',     // preset key: '' | 'cream' | 'green' | 'yellow' | 'mint' | 'beige' | 'sepia'
+      eyeCareColor: '',     // preset key: '' | 'cream' | 'green' | 'yellow' | 'mint' | 'beige' | 'sepia' | '__img_0' | '__img_1' ...
+      bgImages: [],         // [{ type: 'local', url: '...', label: '...', opacity: 0.3 }, ...]
       popupPosition: null,  // { left, top } or null
       styleMemory: false,   // 记忆模式开关
       pageStyles: {},       // { filePath: { theme, isDark, eyeCareColor, enabledSnippets } }
@@ -421,6 +446,81 @@ class SwiftSwitchPlugin extends Plugin {
       this._stopCursorTracking();
       return;
     }
+    // 图片背景处理
+    if (key.startsWith('__img_')) {
+      const imgIdx = parseInt(key.slice(6), 10);
+      const imgItem = (this.settings.bgImages || [])[imgIdx];
+      if (!imgItem) { styleEl.textContent = ''; return; }
+      // 从 pic 文件夹加载
+      const picDir = this._getPluginDir();
+      const fullPath = nodePath.join(picDir, 'pic', imgItem.url);
+      let imgUrl = '';
+      try {
+        const buf = nodeFs.readFileSync(fullPath);
+        const ext = nodePath.extname(fullPath).toLowerCase();
+        const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml' };
+        const mime = mimeMap[ext] || 'image/png';
+        imgUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
+      } catch (e) {
+        console.warn('[SwiftSnippets] Failed to load image:', fullPath, e);
+        return;
+      }
+      const isDark = document.body.classList.contains('theme-dark');
+      const opacity = imgItem.opacity ?? 0.3;
+      const tile = imgItem.tile ?? false;
+      const bg = isDark ? 'rgba(20,20,20,1)' : 'rgba(255,255,255,1)';
+      const bgSec = isDark ? 'rgba(28,28,28,1)' : 'rgba(248,248,248,1)';
+      const bgSize = tile ? 'auto' : 'cover';
+      const bgRepeat = tile ? 'repeat' : 'no-repeat';
+      styleEl.textContent = `
+        .workspace-leaf-content,
+        .markdown-source-view,
+        .markdown-preview-view {
+          --background-primary: ${bg};
+          --background-primary-alt: ${bg};
+          --background-secondary: ${bgSec};
+          --background-secondary-alt: ${bgSec};
+          --background-modifier-border: ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'};
+          background-color: ${bg};
+          background-image: url('${imgUrl}');
+          background-size: ${bgSize};
+          background-position: center;
+          background-repeat: ${bgRepeat};
+          position: relative;
+        }
+        .workspace-leaf-content::before,
+        .markdown-source-view::before,
+        .markdown-preview-view::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background-color: ${isDark ? 'rgba(20,20,20,' + (1 - opacity) + ')' : 'rgba(255,255,255,' + (1 - opacity) + ')'};
+          pointer-events: none;
+          z-index: 0;
+        }
+        .workspace-leaf-content > :not(.minimap-container):not(.nav-header):not(.view-header),
+        .markdown-source-view > :not(.minimap-container),
+        .markdown-preview-view > :not(.minimap-container) {
+          position: relative;
+          z-index: 1;
+        }
+        .minimap-container {
+          position: absolute !important;
+          z-index: 10 !important;
+        }
+        .markdown-source-view .cm-s-obsidian,
+        .markdown-preview-view .markdown-reading-view {
+          background: transparent;
+        }
+        .markdown-source-view.mod-cm6 .cm-line {
+          background: transparent !important;
+        }
+      `;
+      this._removeOverlay('ss-edge-glow-overlay');
+      this._removeOverlay('ss-cursor-glow-overlay');
+      this._stopCursorTracking();
+      return;
+    }
     const isDark = document.body.classList.contains('theme-dark');
     const presets = {
       cream:  { bg: '#faf6e9', bgSec: '#f5f0dc', bgMod: '#efe9d5', darkBg: '#2c2820', darkBgSec: '#332e24', darkBgMod: '#3a3428' },
@@ -436,6 +536,12 @@ class SwiftSwitchPlugin extends Plugin {
       grid:    { bg: '#f5f2eb', bgSec: '#edeae3', bgMod: '#e2dfd8', darkBg: '#282620', darkBgSec: '#302e26', darkBgMod: '#38362c' },
       stripe:  { bg: '#f3efe6', bgSec: '#ebe7de', bgMod: '#e0dcd3', darkBg: '#282420', darkBgSec: '#302c26', darkBgMod: '#38342c' },
       aurora:  { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
+      honeycomb: { bg: '#f5f0e6', bgSec: '#ede8de', bgMod: '#e2ddd3', darkBg: '#282420', darkBgSec: '#302c26', darkBgMod: '#38342c' },
+      waves:     { bg: '#e8f0f5', bgSec: '#dce8f0', bgMod: '#d0dde8', darkBg: '#1e2428', darkBgSec: '#243030', darkBgMod: '#2a3838' },
+      diamond:   { bg: '#f2efe8', bgSec: '#eae7e0', bgMod: '#dfdbd4', darkBg: '#262420', darkBgSec: '#2e2c26', darkBgMod: '#36342c' },
+      noise:     { bg: '#f0ece4', bgSec: '#e8e4dc', bgMod: '#ddd9d1', darkBg: '#28241e', darkBgSec: '#302c24', darkBgMod: '#38342a' },
+      paper:     { bg: '#f4efe2', bgSec: '#ece7da', bgMod: '#e0dbd0', darkBg: '#2a2620', darkBgSec: '#322e26', darkBgMod: '#3a362c' },
+      crosshatch:{ bg: '#f0ede6', bgSec: '#e8e5de', bgMod: '#dddad3', darkBg: '#262420', darkBgSec: '#2e2c26', darkBgMod: '#36342c' },
       breathe: { bg: '#eef5ee', bgSec: '#e2ece2', bgMod: '#d6e3d6', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
       breathe478: { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
       breatheBox: { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
@@ -471,6 +577,7 @@ class SwiftSwitchPlugin extends Plugin {
     const bgSec = isDark ? pt.darkBgSec : pt.bgSec;
     const bgMod = isDark ? pt.darkBgMod : pt.bgMod;
     let patternCSS = '';
+    let extraCSS = '';
     if (key === 'linen') {
       const lineColor = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.015)';
       patternCSS = `background-image:
@@ -505,6 +612,57 @@ class SwiftSwitchPlugin extends Plugin {
           linear-gradient(315deg, rgba(170,100,210,0.12) 0%, transparent 50%);
           animation: ss-aurora 12s ease-in-out infinite;`;
       }
+    } else if (key === 'honeycomb') {
+      const hc = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
+      patternCSS = `background-image:
+        linear-gradient(30deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),
+        linear-gradient(150deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),
+        linear-gradient(30deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),
+        linear-gradient(150deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),
+        linear-gradient(60deg, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'} 25%, transparent 25%, transparent 75%, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'} 75%, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'}),
+        linear-gradient(60deg, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'} 25%, transparent 25%, transparent 75%, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'} 75%, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'});
+        background-size: 40px 70px;
+        background-position: 0 0, 0 0, 20px 35px, 20px 35px, 0 0, 20px 35px;`;
+    } else if (key === 'waves') {
+      const wc = isDark ? 'rgba(100,160,220,0.06)' : 'rgba(60,130,200,0.06)';
+      patternCSS = `background-image:
+        radial-gradient(ellipse at 50% 0%, ${wc} 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 100%, ${wc} 0%, transparent 50%);
+        background-size: 60px 30px;
+        background-position: 0 0, 30px 15px;`;
+    } else if (key === 'diamond') {
+      const dc = isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.03)';
+      patternCSS = `background-image:
+        linear-gradient(45deg, ${dc} 25%, transparent 25%),
+        linear-gradient(-45deg, ${dc} 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, ${dc} 75%),
+        linear-gradient(-45deg, transparent 75%, ${dc} 75%);
+        background-size: 20px 20px;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0;`;
+    } else if (key === 'noise') {
+      const nc = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.02)';
+      patternCSS = `background-image:
+        radial-gradient(circle at 20% 30%, ${nc} 1px, transparent 1px),
+        radial-gradient(circle at 60% 70%, ${nc} 1px, transparent 1px),
+        radial-gradient(circle at 80% 20%, ${nc} 1px, transparent 1px),
+        radial-gradient(circle at 40% 80%, ${nc} 1px, transparent 1px),
+        radial-gradient(circle at 10% 60%, ${nc} 1px, transparent 1px),
+        radial-gradient(circle at 90% 50%, ${nc} 1px, transparent 1px);
+        background-size: 7px 7px, 11px 11px, 9px 9px, 13px 13px, 8px 8px, 10px 10px;
+        background-position: 0 0, 3px 3px, 1px 5px, 4px 2px, 2px 6px, 5px 1px;`;
+    } else if (key === 'paper') {
+      const pc = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)';
+      const pc2 = isDark ? 'rgba(255,240,200,0.02)' : 'rgba(180,160,120,0.02)';
+      patternCSS = `background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 3px, ${pc} 3px, ${pc} 4px),
+        repeating-linear-gradient(90deg, transparent, transparent 5px, ${pc2} 5px, ${pc2} 6px),
+        radial-gradient(ellipse at 20% 30%, ${isDark ? 'rgba(255,240,200,0.03)' : 'rgba(180,160,120,0.03)'}, transparent 50%),
+        radial-gradient(ellipse at 80% 70%, ${isDark ? 'rgba(255,240,200,0.02)' : 'rgba(180,160,120,0.02)'}, transparent 50%);`;
+    } else if (key === 'crosshatch') {
+      const xc = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)';
+      patternCSS = `background-image:
+        repeating-linear-gradient(45deg, transparent, transparent 3px, ${xc} 3px, ${xc} 4px),
+        repeating-linear-gradient(-45deg, transparent, transparent 3px, ${xc} 3px, ${xc} 4px);`;
     } else if (key === 'breathe') {
       if (isDark) {
         patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(80,180,130,0.15) 0%, transparent 70%);
@@ -570,7 +728,6 @@ class SwiftSwitchPlugin extends Plugin {
         }
       `;
     }
-    let extraCSS = '';
     if (key === 'edgeGlow') {
       const glowColor = isDark ? 'rgba(80,180,130,0.2)' : 'rgba(100,200,150,0.2)';
       const glowColorFaint = isDark ? 'rgba(80,180,130,0.08)' : 'rgba(100,200,150,0.08)';
@@ -630,6 +787,46 @@ class SwiftSwitchPlugin extends Plugin {
     `;
   }
 
+  _getPluginDir() {
+    // 优先使用 basePath 构建，fallback 到 manifest.dir
+    if (this.app && this.app.vault && this.app.vault.adapter && this.app.vault.adapter.basePath) {
+      return nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'plugins', 'SwiftSnippets');
+    }
+    if (this.manifest && this.manifest.dir) {
+      return this.manifest.dir;
+    }
+    // 最后 fallback：从 __dirname 获取
+    return __dirname;
+  }
+
+  _syncPicFolder() {
+    const pluginDir = this._getPluginDir();
+    const picDir = nodePath.join(pluginDir, 'pic');
+    try {
+      if (!nodeFs.existsSync(picDir)) {
+        nodeFs.mkdirSync(picDir, { recursive: true });
+      }
+      const imgExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
+      const files = nodeFs.readdirSync(picDir).filter(f => imgExts.some(ext => f.toLowerCase().endsWith(ext)));
+      console.log('[SwiftSnippets] picDir:', picDir, 'files:', files.length);
+      // 保留用户自定义的 opacity 和 tile，新增图片默认 opacity 0.3
+      const existingMap = {};
+      (this.settings.bgImages || []).forEach(img => {
+        existingMap[img.label] = { opacity: img.opacity ?? 0.3, tile: img.tile ?? false };
+      });
+      this.settings.bgImages = files.map(f => ({
+        type: 'local',
+        url: f,
+        label: f,
+        opacity: existingMap[f]?.opacity ?? 0.3,
+        tile: existingMap[f]?.tile ?? false,
+      }));
+      this.saveSettings();
+    } catch (e) {
+      console.warn('[SwiftSnippets] Failed to sync pic folder:', e);
+    }
+  }
+
   _ensureOverlay(id) {
     if (!document.getElementById(id)) {
       const el = document.createElement('div');
@@ -667,7 +864,7 @@ class SwiftSwitchPlugin extends Plugin {
 
   // ─── 护眼色预设列表 ──────────────────────────────────────────────────
   _eyeCarePresets() {
-    return [
+    const base = [
       { key: '',       color: 'var(--background-primary)', darkColor: 'var(--background-primary)', label: t('eyeCare.default') },
       { key: 'cream',  color: '#faf6e9', darkColor: '#2c2820', label: t('eyeCare.cream') },
       { key: 'green',  color: '#e8f5e9', darkColor: '#1e2e22', label: t('eyeCare.green') },
@@ -680,12 +877,30 @@ class SwiftSwitchPlugin extends Plugin {
       { key: 'grid',   color: '#f5f2eb', darkColor: '#282620', label: t('eyeCare.grid'),   pattern: 'grid' },
       { key: 'stripe', color: '#f3efe6', darkColor: '#282420', label: t('eyeCare.stripe'), pattern: 'stripe' },
       { key: 'aurora', color: '#e8f0e8', darkColor: '#1e2820', label: t('eyeCare.aurora'), pattern: 'aurora' },
+      { key: 'honeycomb', color: '#f5f0e6', darkColor: '#282420', label: t('eyeCare.honeycomb'), pattern: 'honeycomb' },
+      { key: 'waves',     color: '#e8f0f5', darkColor: '#1e2428', label: t('eyeCare.waves'),     pattern: 'waves' },
+      { key: 'diamond',   color: '#f2efe8', darkColor: '#262420', label: t('eyeCare.diamond'),   pattern: 'diamond' },
+      { key: 'noise',     color: '#f0ece4', darkColor: '#28241e', label: t('eyeCare.noise'),     pattern: 'noise' },
+      { key: 'paper',     color: '#f4efe2', darkColor: '#2a2620', label: t('eyeCare.paper'),     pattern: 'paper' },
+      { key: 'crosshatch',color: '#f0ede6', darkColor: '#262420', label: t('eyeCare.crosshatch'),pattern: 'crosshatch' },
       { key: 'breathe',color: '#eef5ee', darkColor: '#1e2820', label: t('eyeCare.breathe'),pattern: 'breathe' },
       { key: 'breathe478', color: '#e8f0e8', darkColor: '#1e2820', label: t('eyeCare.breathe478'), pattern: 'breathe478' },
       { key: 'breatheBox', color: '#e8f0e8', darkColor: '#1e2820', label: t('eyeCare.breatheBox'), pattern: 'breatheBox' },
       { key: 'edgeGlow',   color: '#eef5ee', darkColor: '#1e2820', label: t('eyeCare.edgeGlow'),   pattern: 'edgeGlow' },
       { key: 'cursorGlow', color: '#eef5ee', darkColor: '#1e2820', label: t('eyeCare.cursorGlow'), pattern: 'cursorGlow' },
     ];
+    // 追加图片背景（用于滚轮切换）
+    const imgs = this.settings.bgImages || [];
+    imgs.forEach((img, idx) => {
+      base.push({
+        key: `__img_${idx}`,
+        color: '#888', darkColor: '#888',
+        label: img.label || img.url,
+        pattern: 'image',
+        imgItem: img,
+      });
+    });
+    return base;
   }
 
   // ─── 悬浮按钮 ────────────────────────────────────────────────────────
@@ -1353,6 +1568,9 @@ class SwiftSwitchPlugin extends Plugin {
     const existing = document.getElementById('ss-snippets-popup');
     if (existing) { existing.remove(); const ov = document.getElementById('ss-snippets-overlay'); if (ov) ov.remove(); return; }
 
+    // 每次打开面板时刷新 pic 文件夹
+    this._syncPicFolder();
+
     const overlay = document.createElement('div');
     overlay.id = 'ss-snippets-overlay';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;pointer-events:none;';
@@ -1736,8 +1954,9 @@ class SwiftSwitchPlugin extends Plugin {
 
     // ── 护眼色 chips ──────────────────────────────────────────────────
     const eyeCareArea = popup.createDiv();
-    eyeCareArea.style.cssText = 'margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--background-modifier-border);';
+    eyeCareArea.style.cssText = 'margin-bottom:12px;';
 
+    let _renderImgArea = null;
     const renderEyeCare = () => {
       eyeCareArea.empty();
       const currentKey = this.settings.eyeCareColor || '';
@@ -1748,7 +1967,7 @@ class SwiftSwitchPlugin extends Plugin {
       const chipsRow = eyeCareArea.createDiv();
       chipsRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
 
-      const presets = this._eyeCarePresets();
+      const presets = this._eyeCarePresets().filter(p => p.pattern !== 'image');
       const isDarkChip = document.body.classList.contains('theme-dark');
       presets.forEach(p => {
         const chip = chipsRow.createEl('span');
@@ -1782,6 +2001,24 @@ class SwiftSwitchPlugin extends Plugin {
           } else {
             dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:linear-gradient(135deg,rgba(100,200,150,0.3),rgba(100,150,200,0.3),rgba(150,100,200,0.2));border:1px solid ${dotBorder};flex-shrink:0;`;
           }
+        } else if (p.pattern === 'honeycomb') {
+          const hcc = isDarkChip ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
+          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:linear-gradient(30deg,${hcc} 12%,transparent 12.5%,transparent 87%,${hcc} 87.5%),linear-gradient(150deg,${hcc} 12%,transparent 12.5%,transparent 87%,${hcc} 87.5%);background-size:6px 10px;`;
+        } else if (p.pattern === 'waves') {
+          const wcc = isDarkChip ? 'rgba(100,160,220,0.25)' : 'rgba(60,130,200,0.2)';
+          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:radial-gradient(ellipse at 50% 0%,${wcc},transparent 60%),radial-gradient(ellipse at 50% 100%,${wcc},transparent 60%);background-size:8px 5px;`;
+        } else if (p.pattern === 'diamond') {
+          const dcc = isDarkChip ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:linear-gradient(45deg,${dcc} 25%,transparent 25%),linear-gradient(-45deg,${dcc} 25%,transparent 25%),linear-gradient(45deg,transparent 75%,${dcc} 75%),linear-gradient(-45deg,transparent 75%,${dcc} 75%);background-size:5px 5px;background-position:0 0,0 3px,3px -3px,-3px 0;`;
+        } else if (p.pattern === 'noise') {
+          const ncc = isDarkChip ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)';
+          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:radial-gradient(circle,${ncc} 0.5px,transparent 0.5px);background-size:2px 2px,3px 3px;`;
+        } else if (p.pattern === 'paper') {
+          const ppc = isDarkChip ? 'rgba(255,240,200,0.1)' : 'rgba(180,160,120,0.1)';
+          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:repeating-linear-gradient(0deg,transparent,transparent 2px,${ppc} 2px,${ppc} 3px),repeating-linear-gradient(90deg,transparent,transparent 3px,${ppc} 3px,${ppc} 4px);`;
+        } else if (p.pattern === 'crosshatch') {
+          const xcc = isDarkChip ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:repeating-linear-gradient(45deg,transparent,transparent 2px,${xcc} 2px,${xcc} 3px),repeating-linear-gradient(-45deg,transparent,transparent 2px,${xcc} 2px,${xcc} 3px);`;
         } else if (p.pattern === 'breathe') {
           if (isDarkChip) {
             dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(80,180,130,0.5),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
@@ -1827,9 +2064,112 @@ class SwiftSwitchPlugin extends Plugin {
           renderEyeCare();
         });
       });
+      // 重新渲染图片区域（因为 empty() 清除了）
+      if (_renderImgArea) _renderImgArea();
     };
 
-    renderEyeCare();
+    // ── 图片背景区（自动从 pic 文件夹加载）──
+    const imgArea = eyeCareArea;
+
+    const renderImgArea = () => {
+      const oldImgSection = imgArea.querySelector('.ss-img-section');
+      if (oldImgSection) oldImgSection.remove();
+      const imgs = this.settings.bgImages || [];
+      if (imgs.length === 0) return;
+      const section = imgArea.createDiv({ cls: 'ss-img-section' });
+      section.style.cssText = 'margin-top:8px;padding-top:8px;border-top:1px solid var(--background-modifier-border);';
+
+      // 标题行：背景-图片 ? [透明度] [平铺]
+      const titleRow = section.createDiv();
+      titleRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;';
+      const titleEl = titleRow.createEl('span', { text: t('eyeCare.imgTitle') });
+      titleEl.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);';
+      // ? 提示
+      const helpEl = titleRow.createEl('span', { text: '?' });
+      helpEl.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;font-size:10px;font-weight:700;background:var(--background-modifier-border);color:var(--text-muted);cursor:help;flex-shrink:0;';
+      helpEl.setAttribute('title', t('eyeCare.imgHelp'));
+      helpEl.addEventListener('mouseenter', () => {
+        helpEl.style.background = 'var(--interactive-accent)';
+        helpEl.style.color = '#fff';
+      });
+      helpEl.addEventListener('mouseleave', () => {
+        helpEl.style.background = 'var(--background-modifier-border)';
+        helpEl.style.color = 'var(--text-muted)';
+      });
+
+      // 选中图片时，透明度和平铺控件显示在标题后
+      const activeIdx = this.settings.eyeCareColor?.startsWith('__img_') ? parseInt(this.settings.eyeCareColor.slice(6), 10) : -1;
+      const activeImg = activeIdx >= 0 ? imgs[activeIdx] : null;
+      if (activeImg) {
+        const sep = titleRow.createEl('span', { text: '·' });
+        sep.style.cssText = 'color:var(--text-faint);';
+        // 透明度
+        const opLabel = titleRow.createEl('span', { text: t('eyeCare.imgOpacity') });
+        opLabel.style.cssText = 'font-size:10px;color:var(--text-muted);white-space:nowrap;';
+        const slider = titleRow.createEl('input', { type: 'range' });
+        slider.min = '5'; slider.max = '100'; slider.value = String(Math.round((activeImg.opacity ?? 0.3) * 100));
+        slider.style.cssText = 'width:70px;cursor:pointer;height:4px;';
+        const valSpan = titleRow.createEl('span', { text: Math.round((activeImg.opacity ?? 0.3) * 100) + '%' });
+        valSpan.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
+        slider.addEventListener('input', async () => {
+          const v = parseInt(slider.value) / 100;
+          valSpan.textContent = slider.value + '%';
+          activeImg.opacity = v;
+          await this.saveSettings();
+          this.applyEyeCareColor();
+        });
+        // 平铺
+        const tileBtn = titleRow.createEl('span');
+        const isTile = activeImg.tile ?? false;
+        tileBtn.style.cssText = `font-size:10px;padding:1px 6px;border-radius:8px;cursor:pointer;border:1px solid ${isTile ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};background:${isTile ? 'var(--interactive-accent)' : 'var(--background-primary)'};color:${isTile ? '#fff' : 'var(--text-muted)'};user-select:none;`;
+        tileBtn.textContent = t('eyeCare.imgTile');
+        tileBtn.addEventListener('click', async () => {
+          activeImg.tile = !(activeImg.tile ?? false);
+          await this.saveSettings();
+          this.applyEyeCareColor();
+          renderEyeCare();
+        });
+      }
+
+      // 图片 chip 列表（药丸形）
+      const listEl = section.createDiv();
+      listEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;';
+      imgs.forEach((img, idx) => {
+        const isActive = this.settings.eyeCareColor === `__img_${idx}`;
+        const chip = listEl.createDiv();
+        chip.style.cssText = `display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid ${isActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};background:${isActive ? 'var(--interactive-accent)' : 'var(--background-primary)'};color:${isActive ? '#fff' : 'var(--text-normal)'};max-width:150px;transition:border-color 0.15s,background 0.15s,color 0.15s;`;
+        // 缩略图小圆
+        const picDir = this._getPluginDir();
+        const fullPath = nodePath.join(picDir, 'pic', img.url);
+        let dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#6c9,#69c);`;
+        try {
+          const buf = nodeFs.readFileSync(fullPath);
+          const ext = nodePath.extname(fullPath).toLowerCase();
+          const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml' };
+          const mime = mimeMap[ext] || 'image/png';
+          const dataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
+          dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:url('${dataUrl}') center/cover;`;
+        } catch (e) { /* fallback */ }
+        const dot = chip.createEl('span');
+        dot.style.cssText = dotStyle;
+        const nameEl = chip.createEl('span', { text: img.label || img.url });
+        nameEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        // 点击切换选中
+        chip.addEventListener('click', () => {
+          if (this.settings.eyeCareColor === `__img_${idx}`) {
+            this.settings.eyeCareColor = '';
+          } else {
+            this.settings.eyeCareColor = `__img_${idx}`;
+          }
+          this.applyEyeCareColor();
+          this.saveSettings();
+          renderEyeCare();
+        });
+      });
+    };
+
+    _renderImgArea = renderImgArea;
+    renderEyeCare(); // renderEyeCare 内部会调用 _renderImgArea()
 
     // ── 内容区域 ──────────────────────────────────────────────────────
     const contentArea = popup.createDiv();
