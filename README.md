@@ -50,6 +50,15 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 <details>
 <summary>Changelog</summary>
 
+### v1.0.9 (2026-06-25)
+
+- **Open Folder Fix** — Fixed "open background image folder" button not working; switched from `electron.shell` to `child_process.exec` for reliable folder opening
+- **Header Bar Redesign** — Removed standalone white header bar; header now flows naturally with popup content, no more floating white strip or content clipping
+- **Horizontal Scrollbar Fix** — Removed unwanted horizontal scrollbar in the management popup by adding `overflow-x: hidden`
+- **Resize Handle Repositioned** — Resize handle now sits at the true bottom-right corner of the popup (matching SwiftGloss style), using `position: fixed` with dynamic position tracking
+- **Wheel Event Violation Fix** — Added `{ passive: false }` to wheel event listener to eliminate Chrome violation warning
+- **Click Handler Performance** — Deferred popup opening with `setTimeout` to avoid blocking the click handler and eliminate long-task violation
+
 ### v1.0.8 (2026-06-22)
 
 - **Status Bar Editable** — Right-click status bar button to edit text and CSS style, with live preview

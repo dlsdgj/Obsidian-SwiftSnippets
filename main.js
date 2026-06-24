@@ -93,6 +93,16 @@ const i18n = {
     'eyeCare.imgTile': '平铺',
     'eyeCare.imgTitle': '背景-图片',
     'eyeCare.imgHelp': '将图片文件放入 .obsidian\\plugins\\SwiftSnippets\\pic\\',
+    'eyeCare.imgOpenFolder': '点击打开文件夹',
+    'eyeCare.imgRename': '重命名',
+    'eyeCare.imgRotate': '旋转',
+    'eyeCare.imgDelete': '删除',
+    'eyeCare.imgRenameTitle': '重命名图片',
+    'eyeCare.imgNamePlaceholder': '输入新名称...',
+    'eyeCare.imgRotated': '图片已旋转',
+    'eyeCare.imgDeleted': '图片已删除',
+    'eyeCare.imgRenameFailed': '重命名失败',
+    'eyeCare.imgRotateFailed': '旋转失败',
     'styleMemory.chip': '记忆模式',
     'styleMemory.hint': '记忆模式：记住每个页面的风格，切换时自动恢复',
     'styleMemory.on': '记忆模式已开启',
@@ -192,6 +202,16 @@ const i18n = {
     'eyeCare.imgTile': 'Tile',
     'eyeCare.imgTitle': 'Background-Image',
     'eyeCare.imgHelp': 'Put image files into .obsidian\\plugins\\SwiftSnippets\\pic\\',
+    'eyeCare.imgOpenFolder': 'Click to open folder',
+    'eyeCare.imgRename': 'Rename',
+    'eyeCare.imgRotate': 'Rotate',
+    'eyeCare.imgDelete': 'Delete',
+    'eyeCare.imgRenameTitle': 'Rename Image',
+    'eyeCare.imgNamePlaceholder': 'Enter new name...',
+    'eyeCare.imgRotated': 'Image rotated',
+    'eyeCare.imgDeleted': 'Image deleted',
+    'eyeCare.imgRenameFailed': 'Rename failed',
+    'eyeCare.imgRotateFailed': 'Rotate failed',
     'styleMemory.chip': 'Memory Mode',
     'styleMemory.hint': 'Memory mode: remember each page style, auto-restore on switch',
     'styleMemory.on': 'Memory mode on',
@@ -339,6 +359,7 @@ class SwiftSwitchPlugin extends Plugin {
       eyeCareColor: '',     // preset key: '' | 'cream' | 'green' | 'yellow' | 'mint' | 'beige' | 'sepia' | '__img_0' | '__img_1' ...
       bgImages: [],         // [{ type: 'local', url: '...', label: '...', opacity: 0.3 }, ...]
       popupPosition: null,  // { left, top } or null
+      popupSize: null,      // { width, height } or null
       styleMemory: false,   // 记忆模式开关
       pageStyles: {},       // { filePath: { theme, isDark, eyeCareColor, enabledSnippets } }
       exclusiveGroups: ['标题'], // 互斥分组名列表，同组 snippet 不能同时开启
@@ -846,6 +867,48 @@ class SwiftSwitchPlugin extends Plugin {
     }
   }
 
+  // ─── 旋转图片 90 度 ──────────────────────────────────────────────────
+  async _rotateImage(imgUrl) {
+    const picDir = nodePath.join(this._getPluginDir(), 'pic');
+    const fullPath = nodePath.join(picDir, imgUrl);
+    if (!nodeFs.existsSync(fullPath)) throw new Error('File not found');
+
+    const buf = nodeFs.readFileSync(fullPath);
+    const ext = nodePath.extname(fullPath).toLowerCase();
+    const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp' };
+    const mime = mimeMap[ext] || 'image/png';
+    const dataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
+
+    // 加载图片到 Image 对象
+    const imageEl = new Image();
+    await new Promise((resolve, reject) => {
+      imageEl.onload = resolve;
+      imageEl.onerror = reject;
+      imageEl.src = dataUrl;
+    });
+
+    // 用 canvas 旋转 90 度
+    const canvas = document.createElement('canvas');
+    canvas.width = imageEl.height;
+    canvas.height = imageEl.width;
+    const ctx = canvas.getContext('2d');
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(imageEl, -imageEl.width / 2, -imageEl.height / 2);
+
+    // 转回 Buffer 并写入文件
+    const outMime = (ext === '.jpg' || ext === '.jpeg') ? 'image/jpeg' : (ext === '.webp' ? 'image/webp' : 'image/png');
+    const outBuf = await new Promise((resolve, reject) => {
+      canvas.toBlob(async (blob) => {
+        if (!blob) { reject(new Error('toBlob failed')); return; }
+        const arrayBuf = await blob.arrayBuffer();
+        resolve(Buffer.from(arrayBuf));
+      }, outMime, 0.92);
+    });
+
+    nodeFs.writeFileSync(fullPath, outBuf);
+  }
+
   _ensureOverlay(id) {
     if (!document.getElementById(id)) {
       const el = document.createElement('div');
@@ -930,6 +993,9 @@ class SwiftSwitchPlugin extends Plugin {
       if (existing._ssCleanup) existing._ssCleanup();
       existing.remove();
     }
+    // 同步移除旧的拉绳，避免主题切换时残留
+    const oldCord = document.getElementById('ss-pull-cord');
+    if (oldCord) oldCord.remove();
 
     const oldStyle = document.getElementById('ss-float-custom-style');
     if (oldStyle) oldStyle.remove();
@@ -1117,7 +1183,7 @@ class SwiftSwitchPlugin extends Plugin {
         this.saveSettings();
         new Notice(presets[nextIdx].label);
       }
-    });
+    }, { passive: false });
 
     // 拖拽按钮
     let isDragging = false;
@@ -1167,7 +1233,7 @@ class SwiftSwitchPlugin extends Plugin {
 
     // 左键点击打开管理面板
     btn.addEventListener('click', () => {
-      if (!isDragging) this.openSnippetsPopup();
+      if (!isDragging) setTimeout(() => this.openSnippetsPopup(), 0);
     });
 
     // 双击重置护眼色
@@ -1805,7 +1871,7 @@ class SwiftSwitchPlugin extends Plugin {
   // ─── 弹出窗口 ──────────────────────────────────────────────────────────
   openSnippetsPopup(restoreLeft, restoreTop) {
     const existing = document.getElementById('ss-snippets-popup');
-    if (existing) { existing.remove(); const ov = document.getElementById('ss-snippets-overlay'); if (ov) ov.remove(); return; }
+    if (existing) { existing.remove(); const ov = document.getElementById('ss-snippets-overlay'); if (ov) ov.remove(); const pv0 = document.getElementById('ss-img-preview'); if (pv0) pv0.remove(); const rh0 = document.querySelector('.ss-resize-handle'); if (rh0) rh0.remove(); return; }
 
     // 每次打开面板时刷新 pic 文件夹
     this._syncPicFolder();
@@ -1824,7 +1890,8 @@ class SwiftSwitchPlugin extends Plugin {
         if (higherZ && !popup.contains(higherZ)) return;
         this.settings.popupPosition = { left: popup.style.left, top: popup.style.top };
         this.saveSettings();
-        popup.remove(); overlay.remove();
+        popup.remove(); overlay.remove(); resizeHandle.remove();
+        const pv1 = document.getElementById('ss-img-preview'); if (pv1) pv1.remove();
         document.removeEventListener('click', overlayClick);
       }.bind(this));
     }, 0);
@@ -1836,8 +1903,13 @@ class SwiftSwitchPlugin extends Plugin {
       background:rgba(var(--mono-rgb-0),0.75);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);
       border:1px solid rgba(255,255,255,0.12);border-radius:12px;
       box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;
-      padding:16px 20px;min-width:360px;max-width:560px;max-height:75vh;overflow-y:auto;scrollbar-gutter:stable;
+      padding:16px 20px;min-width:360px;min-height:200px;max-width:95vw;max-height:90vh;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;
     `;
+    // 恢复保存的大小
+    if (this.settings.popupSize) {
+      popup.style.width = this.settings.popupSize.width + 'px';
+      popup.style.height = this.settings.popupSize.height + 'px';
+    }
     // 用整数像素居中，避免 transform 亚像素导致模糊
     if (restoreLeft && restoreTop) {
       popup.style.left = restoreLeft;
@@ -1855,7 +1927,7 @@ class SwiftSwitchPlugin extends Plugin {
 
     // ── 头部 ──────────────────────────────────────────────────────────
     const header = popup.createDiv();
-    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;cursor:move;';
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:0;cursor:move;';
 
     const leftHeader = header.createDiv();
     leftHeader.style.cssText = 'display:flex;align-items:center;gap:8px;';
@@ -1873,7 +1945,8 @@ class SwiftSwitchPlugin extends Plugin {
       await this.saveSettings();
       const prevLeft = popup.style.left;
       const prevTop = popup.style.top;
-      popup.remove(); overlay.remove();
+      popup.remove(); overlay.remove(); resizeHandle.remove();
+      const pv2 = document.getElementById('ss-img-preview'); if (pv2) pv2.remove();
       this.openSnippetsPopup(prevLeft, prevTop);
     });
     langSwitch.addEventListener('mouseenter', () => {
@@ -1899,7 +1972,8 @@ class SwiftSwitchPlugin extends Plugin {
     closeBtn.addEventListener('click', () => {
       this.settings.popupPosition = { left: popup.style.left, top: popup.style.top };
       this.saveSettings();
-      popup.remove(); overlay.remove();
+      popup.remove(); overlay.remove(); resizeHandle.remove();
+      const pv3 = document.getElementById('ss-img-preview'); if (pv3) pv3.remove();
     });
 
     // ── 拖拽弹窗 ──────────────────────────────────────────────────────
@@ -1915,6 +1989,7 @@ class SwiftSwitchPlugin extends Plugin {
       if (!isDraggingPopup) return;
       popup.style.left = Math.round(e.clientX - dragOffX) + 'px';
       popup.style.top = Math.round(e.clientY - dragOffY) + 'px';
+      updateResizeHandlePosition();
     });
     document.addEventListener('mouseup', () => {
       if (isDraggingPopup) {
@@ -2323,10 +2398,10 @@ class SwiftSwitchPlugin extends Plugin {
       titleRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;';
       const titleEl = titleRow.createEl('span', { text: t('eyeCare.imgTitle') });
       titleEl.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);';
-      // ? 提示
+      // ? 提示（可点击打开文件夹）
       const helpEl = titleRow.createEl('span', { text: '?' });
-      helpEl.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;font-size:10px;font-weight:700;background:var(--background-modifier-border);color:var(--text-muted);cursor:help;flex-shrink:0;';
-      helpEl.setAttribute('title', t('eyeCare.imgHelp'));
+      helpEl.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;font-size:10px;font-weight:700;background:var(--background-modifier-border);color:var(--text-muted);cursor:pointer;flex-shrink:0;transition:all 0.15s ease;';
+      helpEl.setAttribute('title', t('eyeCare.imgHelp') + '\n' + t('eyeCare.imgOpenFolder'));
       helpEl.addEventListener('mouseenter', () => {
         helpEl.style.background = 'var(--interactive-accent)';
         helpEl.style.color = '#fff';
@@ -2334,6 +2409,24 @@ class SwiftSwitchPlugin extends Plugin {
       helpEl.addEventListener('mouseleave', () => {
         helpEl.style.background = 'var(--background-modifier-border)';
         helpEl.style.color = 'var(--text-muted)';
+      });
+      helpEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        try {
+          const picDir = nodePath.join(this._getPluginDir(), 'pic');
+          if (!nodeFs.existsSync(picDir)) {
+            nodeFs.mkdirSync(picDir, { recursive: true });
+          }
+          const { exec } = require('child_process');
+          const cmd = process.platform === 'win32'
+            ? `explorer "${picDir.replace(/"/g, '\\"')}"`
+            : process.platform === 'darwin'
+              ? `open "${picDir}"`
+              : `xdg-open "${picDir}"`;
+          exec(cmd);
+        } catch (e) {
+          new Notice('Open folder failed: ' + (e?.message || e));
+        }
       });
 
       // 选中图片时，透明度和平铺控件显示在标题后
@@ -2373,6 +2466,37 @@ class SwiftSwitchPlugin extends Plugin {
       // 图片 chip 列表（药丸形）
       const listEl = section.createDiv();
       listEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;';
+
+      // 悬浮预览容器（单个，复用）
+      let previewEl = document.getElementById('ss-img-preview');
+      if (!previewEl) {
+        previewEl = document.createElement('div');
+        previewEl.id = 'ss-img-preview';
+        previewEl.style.cssText = 'position:fixed;z-index:10001;pointer-events:none;opacity:0;transition:opacity 0.15s ease;border-radius:6px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.3);border:1px solid var(--background-modifier-border);';
+        document.body.appendChild(previewEl);
+      }
+      const showPreview = (dataUrl, chipEl) => {
+        previewEl.innerHTML = '';
+        const imgEl = document.createElement('img');
+        imgEl.src = dataUrl;
+        imgEl.style.cssText = 'max-width:220px;max-height:160px;display:block;';
+        previewEl.appendChild(imgEl);
+        const rect = chipEl.getBoundingClientRect();
+        previewEl.style.left = rect.left + 'px';
+        previewEl.style.top = (rect.top - 170) + 'px';
+        // 如果超出顶部，显示在下方
+        requestAnimationFrame(() => {
+          const pRect = previewEl.getBoundingClientRect();
+          if (pRect.top < 4) {
+            previewEl.style.top = (rect.bottom + 6) + 'px';
+          }
+        });
+        previewEl.style.opacity = '1';
+      };
+      const hidePreview = () => {
+        previewEl.style.opacity = '0';
+      };
+
       imgs.forEach((img, idx) => {
         const isActive = this.settings.eyeCareColor === `__img_${idx}`;
         const chip = listEl.createDiv();
@@ -2381,13 +2505,14 @@ class SwiftSwitchPlugin extends Plugin {
         const picDir = this._getPluginDir();
         const fullPath = nodePath.join(picDir, 'pic', img.url);
         let dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#6c9,#69c);`;
+        let chipDataUrl = '';
         try {
           const buf = nodeFs.readFileSync(fullPath);
           const ext = nodePath.extname(fullPath).toLowerCase();
           const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml' };
           const mime = mimeMap[ext] || 'image/png';
-          const dataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
-          dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:url('${dataUrl}') center/cover;`;
+          chipDataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
+          dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:url('${chipDataUrl}') center/cover;`;
         } catch (e) { /* fallback */ }
         const dot = chip.createEl('span');
         dot.style.cssText = dotStyle;
@@ -2403,6 +2528,96 @@ class SwiftSwitchPlugin extends Plugin {
           this.applyEyeCareColor();
           this.saveSettings();
           renderEyeCare();
+        });
+        // 悬浮预览
+        chip.addEventListener('mouseenter', () => {
+          if (chipDataUrl) showPreview(chipDataUrl, chip);
+        });
+        chip.addEventListener('mouseleave', () => {
+          hidePreview();
+        });
+        // 右键菜单：重命名、旋转、删除
+        chip.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          hidePreview();
+
+          const menu = document.createElement('div');
+          menu.style.cssText = `
+            position:fixed;left:${e.clientX}px;top:${e.clientY}px;
+            background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+            border:1px solid var(--background-modifier-border);border-radius:6px;
+            padding:4px 0;z-index:10001;box-shadow:0 4px 16px rgba(0,0,0,0.25);min-width:120px;
+          `;
+          const mkItem = (label, action) => {
+            const item = document.createElement('div');
+            item.textContent = label;
+            item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);';
+            item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
+            item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+            item.addEventListener('click', async () => { menu.remove(); await action(); });
+            menu.appendChild(item);
+          };
+
+          // 重命名
+          mkItem(t('eyeCare.imgRename'), async () => {
+            const newName = await this._promptGroupName(img.url, t('eyeCare.imgRenameTitle'));
+            if (newName && newName !== img.url) {
+              try {
+                const oldPath = nodePath.join(picDir, 'pic', img.url);
+                const newPath = nodePath.join(picDir, 'pic', newName);
+                if (nodeFs.existsSync(oldPath)) {
+                  nodeFs.renameSync(oldPath, newPath);
+                  img.url = newName;
+                  img.label = newName;
+                  await this.saveSettings();
+                  this.applyEyeCareColor();
+                  renderEyeCare();
+                }
+              } catch (_e) { new Notice(t('eyeCare.imgRenameFailed')); }
+            }
+          });
+
+          // 旋转
+          mkItem(t('eyeCare.imgRotate'), async () => {
+            try {
+              await this._rotateImage(img.url);
+              this.applyEyeCareColor();
+              renderEyeCare();
+              new Notice(t('eyeCare.imgRotated'));
+            } catch (_e) { new Notice(t('eyeCare.imgRotateFailed')); }
+          });
+
+          // 删除
+          mkItem(t('eyeCare.imgDelete'), async () => {
+            try {
+              const delPath = nodePath.join(picDir, 'pic', img.url);
+              if (nodeFs.existsSync(delPath)) {
+                nodeFs.unlinkSync(delPath);
+              }
+              // 更新 settings
+              const imgs2 = this.settings.bgImages || [];
+              const delIdx = imgs2.findIndex(i => i.url === img.url);
+              if (delIdx >= 0) imgs2.splice(delIdx, 1);
+              // 修正 eyeCareColor 索引
+              if (this.settings.eyeCareColor === `__img_${delIdx}`) {
+                this.settings.eyeCareColor = '';
+              } else if (this.settings.eyeCareColor?.startsWith('__img_')) {
+                const curIdx = parseInt(this.settings.eyeCareColor.slice(6), 10);
+                if (curIdx > delIdx) {
+                  this.settings.eyeCareColor = `__img_${curIdx - 1}`;
+                }
+              }
+              await this.saveSettings();
+              this.applyEyeCareColor();
+              renderEyeCare();
+              new Notice(t('eyeCare.imgDeleted'));
+            } catch (_e) { new Notice('Delete failed'); }
+          });
+
+          document.body.appendChild(menu);
+          const closeMenu = () => { if (document.body.contains(menu)) menu.remove(); document.removeEventListener('click', closeMenu); };
+          setTimeout(() => document.addEventListener('click', closeMenu), 10);
         });
       });
     };
@@ -2726,12 +2941,58 @@ class SwiftSwitchPlugin extends Plugin {
       document.head.appendChild(animStyle);
     }
 
+    // ── 右下角调整大小手柄 ────────────────────────────────────────────
+    const resizeHandle = document.body.createDiv();
+    resizeHandle.className = 'ss-resize-handle';
+    resizeHandle.style.cssText = 'position:fixed;width:12px;height:12px;cursor:nwse-resize;z-index:10001;background:linear-gradient(135deg,transparent 50%,var(--text-muted) 50%);pointer-events:auto;border-radius:0 0 8px 0;opacity:0.5;transition:opacity 0.15s ease;';
+    resizeHandle.title = _currentLang === 'zh' ? '拖拽调整大小' : 'Drag to resize';
+    resizeHandle.addEventListener('mouseenter', () => { resizeHandle.style.opacity = '1'; });
+    resizeHandle.addEventListener('mouseleave', () => { resizeHandle.style.opacity = '0.5'; });
+
+    const updateResizeHandlePosition = () => {
+      if (!document.body.contains(popup) || !document.body.contains(resizeHandle)) return;
+      const rect = popup.getBoundingClientRect();
+      resizeHandle.style.right = (window.innerWidth - rect.right + 2) + 'px';
+      resizeHandle.style.bottom = (window.innerHeight - rect.bottom + 2) + 'px';
+    };
+    requestAnimationFrame(() => { requestAnimationFrame(updateResizeHandlePosition); });
+
+    let isResizing = false, resizeStartX = 0, resizeStartY = 0, resizeStartW = 0, resizeStartH = 0;
+    resizeHandle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      isResizing = true;
+      resizeStartX = e.clientX;
+      resizeStartY = e.clientY;
+      resizeStartW = popup.offsetWidth;
+      resizeStartH = popup.offsetHeight;
+      document.addEventListener('mousemove', onResizeMove);
+      document.addEventListener('mouseup', onResizeEnd);
+    });
+    const onResizeMove = (e) => {
+      if (!isResizing) return;
+      const newW = Math.max(360, resizeStartW + (e.clientX - resizeStartX));
+      const newH = Math.max(200, resizeStartH + (e.clientY - resizeStartY));
+      popup.style.width = newW + 'px';
+      popup.style.height = newH + 'px';
+      updateResizeHandlePosition();
+    };
+    const onResizeEnd = () => {
+      document.removeEventListener('mousemove', onResizeMove);
+      document.removeEventListener('mouseup', onResizeEnd);
+      if (isResizing) {
+        isResizing = false;
+        this.settings.popupSize = { width: popup.offsetWidth, height: popup.offsetHeight };
+        this.saveSettings();
+      }
+    };
+
     document.body.appendChild(overlay);
     document.body.appendChild(popup);
   }
 
   // ─── 简易输入弹窗（替代 prompt）─────────────────────────────────────────
-  _promptGroupName(defaultValue) {
+  _promptGroupName(defaultValue, title) {
     return new Promise((resolve) => {
       const backdrop = document.createElement('div');
       backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:10002;';
@@ -2750,7 +3011,7 @@ class SwiftSwitchPlugin extends Plugin {
         dialog.style.top = Math.round((window.innerHeight - h) / 2) + 'px';
       });
 
-      const label = dialog.createEl('div', { text: t('group.add') });
+      const label = dialog.createEl('div', { text: title || t('group.add') });
       label.style.cssText = 'font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text-normal);';
 
       const input = dialog.createEl('input', { type: 'text' });

@@ -1,4 +1,13 @@
-## 🆕 v1.0.8 (2026-06-22)
+## 🆕 v1.0.9 (2026-06-25)
+
+- **Open Folder Fix / 打开文件夹修复** — Fixed "open background image folder" button not working; switched from `electron.shell` to `child_process.exec` / 修复"打开背景图片文件夹"按钮点击无效，改用 `child_process.exec` 调用系统命令
+- **Header Bar Redesign / 标题栏重设计** — Removed standalone white header bar; header now flows naturally with popup content, no more floating white strip or content clipping / 移除独立白色标题栏，标题栏融入面板内容流，不再悬浮白条或遮挡内容
+- **Horizontal Scrollbar Fix / 横向滚动条修复** — Removed unwanted horizontal scrollbar in the management popup / 移除管理面板底部多余的横向滚动条
+- **Resize Handle Repositioned / 调整手柄重定位** — Resize handle now sits at the true bottom-right corner of the popup (SwiftGloss style), using `position: fixed` with dynamic position tracking / 调整大小手柄移至面板真正右下角（参考SwiftGloss），使用固定定位动态跟踪
+- **Wheel Event Violation Fix / 滚轮事件警告修复** — Added `{ passive: false }` to wheel event listener to eliminate Chrome violation warning / 为滚轮事件添加 `{ passive: false }` 消除 Chrome 违规警告
+- **Click Handler Performance / 点击性能优化** — Deferred popup opening with `setTimeout` to avoid blocking the click handler / 使用 `setTimeout` 延迟打开面板，避免阻塞点击事件
+
+## v1.0.8 (2026-06-22)
 
 - **Status Bar Editable / 状态栏按钮可编辑** — Right-click status bar button to edit text and CSS style, with live preview / 右键状态栏按钮可修改文字和CSS样式，带实时预览
 - **Context Menu Overflow Fix / 右键菜单溢出修复** — Status bar right-click menu auto-adjusts position to stay within screen / 状态栏右键菜单自动修正位置防止溢出屏幕
