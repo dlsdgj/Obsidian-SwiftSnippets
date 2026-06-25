@@ -50,6 +50,16 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 <details>
 <summary>Changelog</summary>
 
+### v1.1.0 (2026-06-25)
+
+- **Eye Care Presets as CSS Snippets** — Exported all 22 eye care presets (colors + patterns) to `.obsidian/snippets/ss-*.css` files with `.theme-dark`/`.theme-light` selectors for automatic dark/light mode adaptation
+- **Background/Image Unified Group** — Merged background colors and image backgrounds into a single "Background/Image" group with mutual exclusion; drag snippets in from other groups
+- **Mode Switch Visibility** — Dark/light mode toggle in popup header now hides when floating button is active, reappears when floating button is closed
+- **Exclusive Background Group** — Background/Image group is exclusive by default; enabling one snippet disables others; selecting an image disables all snippets and vice versa
+- **Language-Safe Group Key** — Background group uses fixed `__bg__` key instead of localized name, preventing duplicate groups on language switch; auto-migrates old "背景"/"Background" groups
+- **Delete from Background Group** — Deleting a snippet from the Background/Image group now removes the file entirely instead of moving it to "Ungrouped"
+- **Share/More Link** — Added a "Share/More" link in the Background/Image section header linking to GitHub Discussions
+
 ### v1.0.9 (2026-06-25)
 
 - **Open Folder Fix** — Fixed "open background image folder" button not working; switched from `electron.shell` to `child_process.exec` for reliable folder opening

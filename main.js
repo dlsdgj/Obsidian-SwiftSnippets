@@ -91,7 +91,7 @@ const i18n = {
     'eyeCare.imgRemove': '移除',
     'eyeCare.imgOpacity': '透明度',
     'eyeCare.imgTile': '平铺',
-    'eyeCare.imgTitle': '背景-图片',
+    'eyeCare.imgTitle': '图片',
     'eyeCare.imgHelp': '将图片文件放入 .obsidian\\plugins\\SwiftSnippets\\pic\\',
     'eyeCare.imgOpenFolder': '点击打开文件夹',
     'eyeCare.imgRename': '重命名',
@@ -200,7 +200,7 @@ const i18n = {
     'eyeCare.imgRemove': 'Remove',
     'eyeCare.imgOpacity': 'Opacity',
     'eyeCare.imgTile': 'Tile',
-    'eyeCare.imgTitle': 'Background-Image',
+    'eyeCare.imgTitle': 'Image',
     'eyeCare.imgHelp': 'Put image files into .obsidian\\plugins\\SwiftSnippets\\pic\\',
     'eyeCare.imgOpenFolder': 'Click to open folder',
     'eyeCare.imgRename': 'Rename',
@@ -286,6 +286,8 @@ class SwiftSwitchPlugin extends Plugin {
     }
     // 自动创建 pic 文件夹并扫描图片
     this._syncPicFolder();
+    // 导出护眼色预设为 CSS snippets
+    this._exportEyeCareSnippets();
     // 恢复护眼色
     if (this.settings.eyeCareColor) {
       this.applyEyeCareColor();
@@ -486,12 +488,10 @@ class SwiftSwitchPlugin extends Plugin {
       this._stopCursorTracking();
       return;
     }
-    // 图片背景处理
     if (key.startsWith('__img_')) {
       const imgIdx = parseInt(key.slice(6), 10);
       const imgItem = (this.settings.bgImages || [])[imgIdx];
       if (!imgItem) { styleEl.textContent = ''; return; }
-      // 从 pic 文件夹加载
       const picDir = this._getPluginDir();
       const fullPath = nodePath.join(picDir, 'pic', imgItem.url);
       let imgUrl = '';
@@ -562,216 +562,10 @@ class SwiftSwitchPlugin extends Plugin {
       return;
     }
     const isDark = document.body.classList.contains('theme-dark');
-    const presets = {
-      cream:  { bg: '#faf6e9', bgSec: '#f5f0dc', bgMod: '#efe9d5', darkBg: '#2c2820', darkBgSec: '#332e24', darkBgMod: '#3a3428' },
-      green: { bg: '#e8f5e9', bgSec: '#d5ecd7', bgMod: '#c8e6c9', darkBg: '#1e2e22', darkBgSec: '#243628', darkBgMod: '#2a3e2e' },
-      yellow: { bg: '#fffde7', bgSec: '#fff9c4', bgMod: '#fff59d', darkBg: '#2e2c1e', darkBgSec: '#363424', darkBgMod: '#3e3c2a' },
-      mint:  { bg: '#e0f2f1', bgSec: '#d0eceb', bgMod: '#b2dfdb', darkBg: '#1e2a29', darkBgSec: '#243230', darkBgMod: '#2a3a37' },
-      beige: { bg: '#f5f0e8', bgSec: '#ebe5d9', bgMod: '#e0d9cc', darkBg: '#2a2620', darkBgSec: '#322e26', darkBgMod: '#3a362c' },
-      sepia: { bg: '#f4ecd8', bgSec: '#ebe3c6', bgMod: '#ddd4b4', darkBg: '#2a2618', darkBgSec: '#322e20', darkBgMod: '#3a3628' },
-    };
-    const patterns = {
-      linen:   { bg: '#f5f0e8', bgSec: '#ebe5d9', bgMod: '#e0d9cc', darkBg: '#2a2620', darkBgSec: '#322e26', darkBgMod: '#3a362c' },
-      dot:     { bg: '#f0ece4', bgSec: '#e8e3d9', bgMod: '#ddd8ce', darkBg: '#28241e', darkBgSec: '#302c24', darkBgMod: '#38342a' },
-      grid:    { bg: '#f5f2eb', bgSec: '#edeae3', bgMod: '#e2dfd8', darkBg: '#282620', darkBgSec: '#302e26', darkBgMod: '#38362c' },
-      stripe:  { bg: '#f3efe6', bgSec: '#ebe7de', bgMod: '#e0dcd3', darkBg: '#282420', darkBgSec: '#302c26', darkBgMod: '#38342c' },
-      aurora:  { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
-      honeycomb: { bg: '#f5f0e6', bgSec: '#ede8de', bgMod: '#e2ddd3', darkBg: '#282420', darkBgSec: '#302c26', darkBgMod: '#38342c' },
-      waves:     { bg: '#e8f0f5', bgSec: '#dce8f0', bgMod: '#d0dde8', darkBg: '#1e2428', darkBgSec: '#243030', darkBgMod: '#2a3838' },
-      diamond:   { bg: '#f2efe8', bgSec: '#eae7e0', bgMod: '#dfdbd4', darkBg: '#262420', darkBgSec: '#2e2c26', darkBgMod: '#36342c' },
-      noise:     { bg: '#f0ece4', bgSec: '#e8e4dc', bgMod: '#ddd9d1', darkBg: '#28241e', darkBgSec: '#302c24', darkBgMod: '#38342a' },
-      paper:     { bg: '#f4efe2', bgSec: '#ece7da', bgMod: '#e0dbd0', darkBg: '#2a2620', darkBgSec: '#322e26', darkBgMod: '#3a362c' },
-      crosshatch:{ bg: '#f0ede6', bgSec: '#e8e5de', bgMod: '#dddad3', darkBg: '#262420', darkBgSec: '#2e2c26', darkBgMod: '#36342c' },
-      breathe: { bg: '#eef5ee', bgSec: '#e2ece2', bgMod: '#d6e3d6', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
-      breathe478: { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
-      breatheBox: { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
-      edgeGlow:   { bg: '#eef5ee', bgSec: '#e2ece2', bgMod: '#d6e3d6', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
-      cursorGlow: { bg: '#eef5ee', bgSec: '#e2ece2', bgMod: '#d6e3d6', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
-    };
-    const p = presets[key];
-    if (p) {
-      const bg = isDark ? p.darkBg : p.bg;
-      const bgSec = isDark ? p.darkBgSec : p.bgSec;
-      const bgMod = isDark ? p.darkBgMod : p.bgMod;
-      styleEl.textContent = `
-        .workspace-leaf-content,
-        .markdown-source-view,
-        .markdown-preview-view {
-          --background-primary: ${bg};
-          --background-primary-alt: ${bgSec};
-          --background-secondary: ${bgSec};
-          --background-secondary-alt: ${bgMod};
-          --background-modifier-border: ${bgMod};
-          background: ${bg};
-        }
-        .markdown-source-view .cm-s-obsidian,
-        .markdown-preview-view .markdown-reading-view {
-          background: ${bg};
-        }
-      `;
-      return;
-    }
-    const pt = patterns[key];
-    if (!pt) { styleEl.textContent = ''; return; }
-    const bg = isDark ? pt.darkBg : pt.bg;
-    const bgSec = isDark ? pt.darkBgSec : pt.bgSec;
-    const bgMod = isDark ? pt.darkBgMod : pt.bgMod;
-    let patternCSS = '';
-    let extraCSS = '';
-    if (key === 'linen') {
-      const lineColor = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.015)';
-      patternCSS = `background-image:
-        repeating-linear-gradient(0deg, transparent, transparent 2px, ${lineColor} 2px, ${lineColor} 3px),
-        repeating-linear-gradient(90deg, transparent, transparent 2px, ${lineColor} 2px, ${lineColor} 3px);`;
-    } else if (key === 'dot') {
-      const dotColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
-      patternCSS = `background-image: radial-gradient(circle, ${dotColor} 1px, transparent 1px);
-        background-size: 12px 12px;`;
-    } else if (key === 'grid') {
-      const gridColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
-      patternCSS = `background-image:
-        linear-gradient(${gridColor} 1px, transparent 1px),
-        linear-gradient(90deg, ${gridColor} 1px, transparent 1px);
-        background-size: 20px 20px;`;
-    } else if (key === 'stripe') {
-      const stripeColor = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.02)';
-      patternCSS = `background-image: repeating-linear-gradient(
-        -45deg, transparent, transparent 4px, ${stripeColor} 4px, ${stripeColor} 5px
-      );`;
-    } else if (key === 'aurora') {
-      if (isDark) {
-        patternCSS = `background-image:
-          linear-gradient(135deg, rgba(80,180,130,0.12) 0%, transparent 50%),
-          linear-gradient(225deg, rgba(80,130,200,0.12) 0%, transparent 50%),
-          linear-gradient(315deg, rgba(150,80,190,0.08) 0%, transparent 50%);
-          animation: ss-aurora 12s ease-in-out infinite;`;
-      } else {
-        patternCSS = `background-image:
-          linear-gradient(135deg, rgba(100,200,150,0.18) 0%, transparent 50%),
-          linear-gradient(225deg, rgba(100,150,220,0.18) 0%, transparent 50%),
-          linear-gradient(315deg, rgba(170,100,210,0.12) 0%, transparent 50%);
-          animation: ss-aurora 12s ease-in-out infinite;`;
-      }
-    } else if (key === 'honeycomb') {
-      const hc = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
-      patternCSS = `background-image:
-        linear-gradient(30deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),
-        linear-gradient(150deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),
-        linear-gradient(30deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),
-        linear-gradient(150deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),
-        linear-gradient(60deg, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'} 25%, transparent 25%, transparent 75%, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'} 75%, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'}),
-        linear-gradient(60deg, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'} 25%, transparent 25%, transparent 75%, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'} 75%, ${isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'});
-        background-size: 40px 70px;
-        background-position: 0 0, 0 0, 20px 35px, 20px 35px, 0 0, 20px 35px;`;
-    } else if (key === 'waves') {
-      const wc = isDark ? 'rgba(100,160,220,0.06)' : 'rgba(60,130,200,0.06)';
-      patternCSS = `background-image:
-        radial-gradient(ellipse at 50% 0%, ${wc} 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 100%, ${wc} 0%, transparent 50%);
-        background-size: 60px 30px;
-        background-position: 0 0, 30px 15px;`;
-    } else if (key === 'diamond') {
-      const dc = isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.03)';
-      patternCSS = `background-image:
-        linear-gradient(45deg, ${dc} 25%, transparent 25%),
-        linear-gradient(-45deg, ${dc} 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, ${dc} 75%),
-        linear-gradient(-45deg, transparent 75%, ${dc} 75%);
-        background-size: 20px 20px;
-        background-position: 0 0, 0 10px, 10px -10px, -10px 0;`;
-    } else if (key === 'noise') {
-      const nc = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.02)';
-      patternCSS = `background-image:
-        radial-gradient(circle at 20% 30%, ${nc} 1px, transparent 1px),
-        radial-gradient(circle at 60% 70%, ${nc} 1px, transparent 1px),
-        radial-gradient(circle at 80% 20%, ${nc} 1px, transparent 1px),
-        radial-gradient(circle at 40% 80%, ${nc} 1px, transparent 1px),
-        radial-gradient(circle at 10% 60%, ${nc} 1px, transparent 1px),
-        radial-gradient(circle at 90% 50%, ${nc} 1px, transparent 1px);
-        background-size: 7px 7px, 11px 11px, 9px 9px, 13px 13px, 8px 8px, 10px 10px;
-        background-position: 0 0, 3px 3px, 1px 5px, 4px 2px, 2px 6px, 5px 1px;`;
-    } else if (key === 'paper') {
-      const pc = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)';
-      const pc2 = isDark ? 'rgba(255,240,200,0.02)' : 'rgba(180,160,120,0.02)';
-      patternCSS = `background-image:
-        repeating-linear-gradient(0deg, transparent, transparent 3px, ${pc} 3px, ${pc} 4px),
-        repeating-linear-gradient(90deg, transparent, transparent 5px, ${pc2} 5px, ${pc2} 6px),
-        radial-gradient(ellipse at 20% 30%, ${isDark ? 'rgba(255,240,200,0.03)' : 'rgba(180,160,120,0.03)'}, transparent 50%),
-        radial-gradient(ellipse at 80% 70%, ${isDark ? 'rgba(255,240,200,0.02)' : 'rgba(180,160,120,0.02)'}, transparent 50%);`;
-    } else if (key === 'crosshatch') {
-      const xc = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)';
-      patternCSS = `background-image:
-        repeating-linear-gradient(45deg, transparent, transparent 3px, ${xc} 3px, ${xc} 4px),
-        repeating-linear-gradient(-45deg, transparent, transparent 3px, ${xc} 3px, ${xc} 4px);`;
-    } else if (key === 'breathe') {
-      if (isDark) {
-        patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(80,180,130,0.15) 0%, transparent 70%);
-          animation: ss-breathe 5s ease-in-out infinite;`;
-      } else {
-        patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(100,200,150,0.22) 0%, transparent 70%);
-          animation: ss-breathe 5s ease-in-out infinite;`;
-      }
-    } else if (key === 'breathe478') {
-      if (isDark) {
-        patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(80,180,130,0.18) 0%, transparent 70%);
-          animation: ss-breathe478 19s ease-in-out infinite;`;
-      } else {
-        patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(100,200,150,0.25) 0%, transparent 70%);
-          animation: ss-breathe478 19s ease-in-out infinite;`;
-      }
-    } else if (key === 'breatheBox') {
-      if (isDark) {
-        patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(80,180,130,0.18) 0%, transparent 70%);
-          animation: ss-breatheBox 16s ease-in-out infinite;`;
-      } else {
-        patternCSS = `background-image: radial-gradient(ellipse at 50% 50%, rgba(100,200,150,0.25) 0%, transparent 70%);
-          animation: ss-breatheBox 16s ease-in-out infinite;`;
-      }
-    } else if (key === 'edgeGlow') {
-      patternCSS = '';
-    } else if (key === 'cursorGlow') {
-      patternCSS = '';
-    }
-    let animCSS = '';
-    if (key === 'aurora') {
-      animCSS = `
-        @keyframes ss-aurora {
-          0%, 100% { background-position: 0% 0%; }
-          33% { background-position: 30% 20%; }
-          66% { background-position: -20% 30%; }
-        }
-      `;
-    } else if (key === 'breathe') {
-      animCSS = `
-        @keyframes ss-breathe {
-          0%, 100% { background-size: 80% 80%; opacity: 0.7; }
-          50% { background-size: 140% 140%; opacity: 1; }
-        }
-      `;
-    } else if (key === 'breathe478') {
-      animCSS = `
-        @keyframes ss-breathe478 {
-          0% { background-size: 60% 60%; opacity: 0.5; }
-          21.05% { background-size: 140% 140%; opacity: 1; }
-          57.89% { background-size: 140% 140%; opacity: 1; }
-          100% { background-size: 60% 60%; opacity: 0.5; }
-        }
-      `;
-    } else if (key === 'breatheBox') {
-      animCSS = `
-        @keyframes ss-breatheBox {
-          0% { background-size: 60% 60%; opacity: 0.5; }
-          25% { background-size: 140% 140%; opacity: 1; }
-          50% { background-size: 140% 140%; opacity: 1; }
-          75% { background-size: 60% 60%; opacity: 0.5; }
-          100% { background-size: 60% 60%; opacity: 0.5; }
-        }
-      `;
-    }
     if (key === 'edgeGlow') {
       const glowColor = isDark ? 'rgba(80,180,130,0.2)' : 'rgba(100,200,150,0.2)';
       const glowColorFaint = isDark ? 'rgba(80,180,130,0.08)' : 'rgba(100,200,150,0.08)';
-      extraCSS = `
+      styleEl.textContent = `
         @keyframes ss-edgeGlow {
           0%, 100% { opacity: 0.3; }
           50% { opacity: 1; }
@@ -784,9 +578,13 @@ class SwiftSwitchPlugin extends Plugin {
         }
       `;
       this._ensureOverlay('ss-edge-glow-overlay');
-    } else if (key === 'cursorGlow') {
+      this._stopCursorTracking();
+      this._removeOverlay('ss-cursor-glow-overlay');
+      return;
+    }
+    if (key === 'cursorGlow') {
       const cursorColor = isDark ? 'rgba(80,180,130,0.18)' : 'rgba(100,200,150,0.18)';
-      extraCSS = `
+      styleEl.textContent = `
         @keyframes ss-cursorGlow {
           0%, 100% { opacity: 0.4; }
           50% { opacity: 1; }
@@ -801,30 +599,13 @@ class SwiftSwitchPlugin extends Plugin {
       `;
       this._ensureOverlay('ss-cursor-glow-overlay');
       this._startCursorTracking();
+      this._removeOverlay('ss-edge-glow-overlay');
+      return;
     }
-    if (key !== 'cursorGlow') { this._stopCursorTracking(); }
-    if (key !== 'edgeGlow') { this._removeOverlay('ss-edge-glow-overlay'); }
-    if (key !== 'cursorGlow') { this._removeOverlay('ss-cursor-glow-overlay'); }
-    styleEl.textContent = `
-      ${animCSS}
-      .workspace-leaf-content,
-      .markdown-source-view,
-      .markdown-preview-view {
-        --background-primary: ${bg};
-        --background-primary-alt: ${bgSec};
-        --background-secondary: ${bgSec};
-        --background-secondary-alt: ${bgMod};
-        --background-modifier-border: ${bgMod};
-        background-color: ${bg};
-        ${patternCSS}
-      }
-      .markdown-source-view .cm-s-obsidian,
-      .markdown-preview-view .markdown-reading-view {
-        background-color: ${bg};
-        ${patternCSS}
-      }
-      ${extraCSS}
-    `;
+    styleEl.textContent = '';
+    this._removeOverlay('ss-edge-glow-overlay');
+    this._removeOverlay('ss-cursor-glow-overlay');
+    this._stopCursorTracking();
   }
 
   _getPluginDir() {
@@ -838,6 +619,186 @@ class SwiftSwitchPlugin extends Plugin {
     // 最后 fallback：从 __dirname 获取
     return __dirname;
   }
+
+  _exportEyeCareSnippets() {
+    const snippetsDir = nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'snippets');
+    try {
+      if (!nodeFs.existsSync(snippetsDir)) {
+        nodeFs.mkdirSync(snippetsDir, { recursive: true });
+      }
+    } catch (e) {
+      console.warn('[SwiftSnippets] Failed to create snippets dir:', e);
+      return;
+    }
+
+    const presets = {
+      cream:  { bg: '#faf6e9', bgSec: '#f5f0dc', bgMod: '#efe9d5', darkBg: '#2c2820', darkBgSec: '#332e24', darkBgMod: '#3a3428' },
+      green: { bg: '#e8f5e9', bgSec: '#d5ecd7', bgMod: '#c8e6c9', darkBg: '#1e2e22', darkBgSec: '#243628', darkBgMod: '#2a3e2e' },
+      yellow: { bg: '#fffde7', bgSec: '#fff9c4', bgMod: '#fff59d', darkBg: '#2e2c1e', darkBgSec: '#363424', darkBgMod: '#3e3c2a' },
+      mint:  { bg: '#e0f2f1', bgSec: '#d0eceb', bgMod: '#b2dfdb', darkBg: '#1e2a29', darkBgSec: '#243230', darkBgMod: '#2a3a37' },
+      beige: { bg: '#f5f0e8', bgSec: '#ebe5d9', bgMod: '#e0d9cc', darkBg: '#2a2620', darkBgSec: '#322e26', darkBgMod: '#3a362c' },
+      sepia: { bg: '#f4ecd8', bgSec: '#ebe3c6', bgMod: '#ddd4b4', darkBg: '#2a2618', darkBgSec: '#322e20', darkBgMod: '#3a3628' },
+    };
+
+    const patterns = {
+      linen:   { bg: '#f5f0e8', bgSec: '#ebe5d9', bgMod: '#e0d9cc', darkBg: '#2a2620', darkBgSec: '#322e26', darkBgMod: '#3a362c', pattern: 'linen' },
+      dot:     { bg: '#f0ece4', bgSec: '#e8e3d9', bgMod: '#ddd8ce', darkBg: '#28241e', darkBgSec: '#302c24', darkBgMod: '#38342a', pattern: 'dot' },
+      grid:    { bg: '#f5f2eb', bgSec: '#edeae3', bgMod: '#e2dfd8', darkBg: '#282620', darkBgSec: '#302e26', darkBgMod: '#38362c', pattern: 'grid' },
+      stripe:  { bg: '#f3efe6', bgSec: '#ebe7de', bgMod: '#e0dcd3', darkBg: '#282420', darkBgSec: '#302c26', darkBgMod: '#38342c', pattern: 'stripe' },
+      aurora:  { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c', pattern: 'aurora' },
+      honeycomb: { bg: '#f5f0e6', bgSec: '#ede8de', bgMod: '#e2ddd3', darkBg: '#282420', darkBgSec: '#302c26', darkBgMod: '#38342c', pattern: 'honeycomb' },
+      waves:     { bg: '#e8f0f5', bgSec: '#dce8f0', bgMod: '#d0dde8', darkBg: '#1e2428', darkBgSec: '#243030', darkBgMod: '#2a3838', pattern: 'waves' },
+      diamond:   { bg: '#f2efe8', bgSec: '#eae7e0', bgMod: '#dfdbd4', darkBg: '#262420', darkBgSec: '#2e2c26', darkBgMod: '#36342c', pattern: 'diamond' },
+      noise:     { bg: '#f0ece4', bgSec: '#e8e4dc', bgMod: '#ddd9d1', darkBg: '#28241e', darkBgSec: '#302c24', darkBgMod: '#38342a', pattern: 'noise' },
+      paper:     { bg: '#f4efe2', bgSec: '#ece7da', bgMod: '#e0dbd0', darkBg: '#2a2620', darkBgSec: '#322e26', darkBgMod: '#3a362c', pattern: 'paper' },
+      crosshatch:{ bg: '#f0ede6', bgSec: '#e8e5de', bgMod: '#dddad3', darkBg: '#262420', darkBgSec: '#2e2c26', darkBgMod: '#36342c', pattern: 'crosshatch' },
+      breathe: { bg: '#eef5ee', bgSec: '#e2ece2', bgMod: '#d6e3d6', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c', pattern: 'breathe' },
+      breathe478: { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c', pattern: 'breathe478' },
+      breatheBox: { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c', pattern: 'breatheBox' },
+
+    };
+
+    const allPresets = { ...presets, ...patterns };
+
+    const generatePatternCSS = (key, isDark) => {
+      if (key === 'linen') {
+        const lc = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.015)';
+        return `background-image:\n  repeating-linear-gradient(0deg, transparent, transparent 2px, ${lc} 2px, ${lc} 3px),\n  repeating-linear-gradient(90deg, transparent, transparent 2px, ${lc} 2px, ${lc} 3px);`;
+      } else if (key === 'dot') {
+        const dc = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
+        return `background-image: radial-gradient(circle, ${dc} 1px, transparent 1px);\n  background-size: 12px 12px;`;
+      } else if (key === 'grid') {
+        const gc = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
+        return `background-image:\n  linear-gradient(${gc} 1px, transparent 1px),\n  linear-gradient(90deg, ${gc} 1px, transparent 1px);\n  background-size: 20px 20px;`;
+      } else if (key === 'stripe') {
+        const sc = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.02)';
+        return `background-image: repeating-linear-gradient(\n  -45deg, transparent, transparent 4px, ${sc} 4px, ${sc} 5px\n);`;
+      } else if (key === 'aurora') {
+        if (isDark) {
+          return `background-image:\n  linear-gradient(135deg, rgba(80,180,130,0.12) 0%, transparent 50%),\n  linear-gradient(225deg, rgba(80,130,200,0.12) 0%, transparent 50%),\n  linear-gradient(315deg, rgba(150,80,190,0.08) 0%, transparent 50%);\n  animation: ss-aurora 12s ease-in-out infinite;`;
+        }
+        return `background-image:\n  linear-gradient(135deg, rgba(100,200,150,0.18) 0%, transparent 50%),\n  linear-gradient(225deg, rgba(100,150,220,0.18) 0%, transparent 50%),\n  linear-gradient(315deg, rgba(170,100,210,0.12) 0%, transparent 50%);\n  animation: ss-aurora 12s ease-in-out infinite;`;
+      } else if (key === 'honeycomb') {
+        const hc = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
+        const hc2 = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)';
+        return `background-image:\n  linear-gradient(30deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),\n  linear-gradient(150deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),\n  linear-gradient(30deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),\n  linear-gradient(150deg, ${hc} 12%, transparent 12.5%, transparent 87%, ${hc} 87.5%, ${hc}),\n  linear-gradient(60deg, ${hc2} 25%, transparent 25%, transparent 75%, ${hc2} 75%, ${hc2}),\n  linear-gradient(60deg, ${hc2} 25%, transparent 25%, transparent 75%, ${hc2} 75%, ${hc2});\n  background-size: 40px 70px;\n  background-position: 0 0, 0 0, 20px 35px, 20px 35px, 0 0, 20px 35px;`;
+      } else if (key === 'waves') {
+        const wc = isDark ? 'rgba(100,160,220,0.06)' : 'rgba(60,130,200,0.06)';
+        return `background-image:\n  radial-gradient(ellipse at 50% 0%, ${wc} 0%, transparent 50%),\n  radial-gradient(ellipse at 50% 100%, ${wc} 0%, transparent 50%);\n  background-size: 60px 30px;\n  background-position: 0 0, 30px 15px;`;
+      } else if (key === 'diamond') {
+        const dc = isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.03)';
+        return `background-image:\n  linear-gradient(45deg, ${dc} 25%, transparent 25%),\n  linear-gradient(-45deg, ${dc} 25%, transparent 25%),\n  linear-gradient(45deg, transparent 75%, ${dc} 75%),\n  linear-gradient(-45deg, transparent 75%, ${dc} 75%);\n  background-size: 20px 20px;\n  background-position: 0 0, 0 10px, 10px -10px, -10px 0;`;
+      } else if (key === 'noise') {
+        const nc = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.02)';
+        return `background-image:\n  radial-gradient(circle at 20% 30%, ${nc} 1px, transparent 1px),\n  radial-gradient(circle at 60% 70%, ${nc} 1px, transparent 1px),\n  radial-gradient(circle at 80% 20%, ${nc} 1px, transparent 1px),\n  radial-gradient(circle at 40% 80%, ${nc} 1px, transparent 1px),\n  radial-gradient(circle at 10% 60%, ${nc} 1px, transparent 1px),\n  radial-gradient(circle at 90% 50%, ${nc} 1px, transparent 1px);\n  background-size: 7px 7px, 11px 11px, 9px 9px, 13px 13px, 8px 8px, 10px 10px;\n  background-position: 0 0, 3px 3px, 1px 5px, 4px 2px, 2px 6px, 5px 1px;`;
+      } else if (key === 'paper') {
+        const pc = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)';
+        const pc2 = isDark ? 'rgba(255,240,200,0.02)' : 'rgba(180,160,120,0.02)';
+        const pc3 = isDark ? 'rgba(255,240,200,0.03)' : 'rgba(180,160,120,0.03)';
+        const pc4 = isDark ? 'rgba(255,240,200,0.02)' : 'rgba(180,160,120,0.02)';
+        return `background-image:\n  repeating-linear-gradient(0deg, transparent, transparent 3px, ${pc} 3px, ${pc} 4px),\n  repeating-linear-gradient(90deg, transparent, transparent 5px, ${pc2} 5px, ${pc2} 6px),\n  radial-gradient(ellipse at 20% 30%, ${pc3}, transparent 50%),\n  radial-gradient(ellipse at 80% 70%, ${pc4}, transparent 50%);`;
+      } else if (key === 'crosshatch') {
+        const xc = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)';
+        return `background-image:\n  repeating-linear-gradient(45deg, transparent, transparent 3px, ${xc} 3px, ${xc} 4px),\n  repeating-linear-gradient(-45deg, transparent, transparent 3px, ${xc} 3px, ${xc} 4px);`;
+      } else if (key === 'breathe') {
+        if (isDark) {
+          return `background-image: radial-gradient(ellipse at 50% 50%, rgba(80,180,130,0.15) 0%, transparent 70%);\n  animation: ss-breathe 5s ease-in-out infinite;`;
+        }
+        return `background-image: radial-gradient(ellipse at 50% 50%, rgba(100,200,150,0.22) 0%, transparent 70%);\n  animation: ss-breathe 5s ease-in-out infinite;`;
+      } else if (key === 'breathe478') {
+        if (isDark) {
+          return `background-image: radial-gradient(ellipse at 50% 50%, rgba(80,180,130,0.18) 0%, transparent 70%);\n  animation: ss-breathe478 19s ease-in-out infinite;`;
+        }
+        return `background-image: radial-gradient(ellipse at 50% 50%, rgba(100,200,150,0.25) 0%, transparent 70%);\n  animation: ss-breathe478 19s ease-in-out infinite;`;
+      } else if (key === 'breatheBox') {
+        if (isDark) {
+          return `background-image: radial-gradient(ellipse at 50% 50%, rgba(80,180,130,0.18) 0%, transparent 70%);\n  animation: ss-breatheBox 16s ease-in-out infinite;`;
+        }
+        return `background-image: radial-gradient(ellipse at 50% 50%, rgba(100,200,150,0.25) 0%, transparent 70%);\n  animation: ss-breatheBox 16s ease-in-out infinite;`;
+      }
+      return '';
+    };
+
+    const generateAnimCSS = (key) => {
+      if (key === 'aurora') {
+        return `@keyframes ss-aurora {\n  0%, 100% { background-position: 0% 0%; }\n  33% { background-position: 30% 20%; }\n  66% { background-position: -20% 30%; }\n}`;
+      } else if (key === 'breathe') {
+        return `@keyframes ss-breathe {\n  0%, 100% { background-size: 80% 80%; opacity: 0.7; }\n  50% { background-size: 140% 140%; opacity: 1; }\n}`;
+      } else if (key === 'breathe478') {
+        return `@keyframes ss-breathe478 {\n  0% { background-size: 60% 60%; opacity: 0.5; }\n  21.05% { background-size: 140% 140%; opacity: 1; }\n  57.89% { background-size: 140% 140%; opacity: 1; }\n  100% { background-size: 60% 60%; opacity: 0.5; }\n}`;
+      } else if (key === 'breatheBox') {
+        return `@keyframes ss-breatheBox {\n  0% { background-size: 60% 60%; opacity: 0.5; }\n  25% { background-size: 140% 140%; opacity: 1; }\n  50% { background-size: 140% 140%; opacity: 1; }\n  75% { background-size: 60% 60%; opacity: 0.5; }\n  100% { background-size: 60% 60%; opacity: 0.5; }\n}`;
+      }
+      return '';
+    };
+
+    for (const [key, p] of Object.entries(allPresets)) {
+      const fileName = `ss-${key}.css`;
+      const filePath = nodePath.join(snippetsDir, fileName);
+
+      const darkBg = p.darkBg;
+      const darkBgSec = p.darkBgSec;
+      const darkBgMod = p.darkBgMod;
+      const lightBg = p.bg;
+      const lightBgSec = p.bgSec;
+      const lightBgMod = p.bgMod;
+
+      let darkPattern = '';
+      let lightPattern = '';
+      let animCSS = '';
+      if (p.pattern) {
+        darkPattern = generatePatternCSS(key, true);
+        lightPattern = generatePatternCSS(key, false);
+        animCSS = generateAnimCSS(key);
+      }
+
+      let darkExtra = '';
+      let lightExtra = '';
+
+
+      let css = `/* SwiftSnippets eyecare preset: ${key} */\n`;
+      css += `${animCSS}\n\n`;
+      css += `.theme-dark .workspace-leaf-content,\n.theme-dark .markdown-source-view,\n.theme-dark .markdown-preview-view {\n  --background-primary: ${darkBg};\n  --background-primary-alt: ${darkBgSec};\n  --background-secondary: ${darkBgSec};\n  --background-secondary-alt: ${darkBgMod};\n  --background-modifier-border: ${darkBgMod};\n  background-color: ${darkBg};${darkPattern ? '\n  ' + darkPattern : ''}\n}\n.theme-dark .markdown-source-view .cm-s-obsidian,\n.theme-dark .markdown-preview-view .markdown-reading-view {\n  background-color: ${darkBg};${darkPattern ? '\n  ' + darkPattern : ''}\n}\n\n`;
+      css += `.theme-light .workspace-leaf-content,\n.theme-light .markdown-source-view,\n.theme-light .markdown-preview-view {\n  --background-primary: ${lightBg};\n  --background-primary-alt: ${lightBgSec};\n  --background-secondary: ${lightBgSec};\n  --background-secondary-alt: ${lightBgMod};\n  --background-modifier-border: ${lightBgMod};\n  background-color: ${lightBg};${lightPattern ? '\n  ' + lightPattern : ''}\n}\n.theme-light .markdown-source-view .cm-s-obsidian,\n.theme-light .markdown-preview-view .markdown-reading-view {\n  background-color: ${lightBg};${lightPattern ? '\n  ' + lightPattern : ''}\n}\n`;
+
+      try {
+        nodeFs.writeFileSync(filePath, css, 'utf-8');
+      } catch (e) {
+        console.warn('[SwiftSnippets] Failed to export preset:', key, e);
+      }
+    }
+
+    const bgGroupName = '__bg__';
+    for (const oldName of ['背景', 'Background']) {
+      if (this.settings.groups[oldName]) {
+        if (!this.settings.groups[bgGroupName]) {
+          this.settings.groups[bgGroupName] = this.settings.groups[oldName];
+          this.settings.groupOrder.push(bgGroupName);
+        } else {
+          for (const m of this.settings.groups[oldName]) {
+            if (!this.settings.groups[bgGroupName].includes(m)) this.settings.groups[bgGroupName].push(m);
+          }
+        }
+        delete this.settings.groups[oldName];
+        this.settings.groupOrder = this.settings.groupOrder.filter(n => n !== oldName);
+        if (this.settings.collapsedGroups[oldName] !== undefined) {
+          this.settings.collapsedGroups[bgGroupName] = this.settings.collapsedGroups[oldName];
+          delete this.settings.collapsedGroups[oldName];
+        }
+      }
+    }
+    if (!this.settings.groups[bgGroupName]) {
+      this.settings.groups[bgGroupName] = [];
+      this.settings.groupOrder.push(bgGroupName);
+    }
+    if (!this.settings.exclusiveGroups) this.settings.exclusiveGroups = [];
+    if (!this.settings.exclusiveGroups.includes(bgGroupName)) {
+      this.settings.exclusiveGroups.push(bgGroupName);
+    }
+
+    this.saveSettings();
+  }
+
 
   _syncPicFolder() {
     const pluginDir = this._getPluginDir();
@@ -1168,20 +1129,27 @@ class SwiftSwitchPlugin extends Plugin {
         }
         await this.switchTheme(list[nextIdx]);
       } else {
-        // 普通滚轮：切换护眼色
-        const presets = this._eyeCarePresets();
-        const currentKey = this.settings.eyeCareColor || '';
-        const idx = presets.findIndex(p => p.key === currentKey);
+        const bgGroupName = '__bg__';
+        const bgMembers = this.settings.groups[bgGroupName] || [];
+        if (bgMembers.length === 0) return;
+        const { enabledSnippets } = await this.getSnippetInfo();
+        const enabledBg = bgMembers.filter(n => enabledSnippets.includes(n));
+        const currentIdx = bgMembers.indexOf(enabledBg[enabledBg.length - 1] || '');
         let nextIdx;
         if (e.deltaY > 0) {
-          nextIdx = idx < presets.length - 1 ? idx + 1 : 0;
+          nextIdx = currentIdx < bgMembers.length - 1 ? currentIdx + 1 : -1;
         } else {
-          nextIdx = idx > 0 ? idx - 1 : presets.length - 1;
+          nextIdx = currentIdx > 0 ? currentIdx - 1 : -1;
         }
-        this.settings.eyeCareColor = presets[nextIdx].key;
-        this.applyEyeCareColor();
-        this.saveSettings();
-        new Notice(presets[nextIdx].label);
+        for (const name of enabledBg) {
+          this._setSnippetEnabled(name, false);
+        }
+        if (nextIdx >= 0) {
+          this._setSnippetEnabled(bgMembers[nextIdx], true);
+          new Notice(bgMembers[nextIdx]);
+        } else {
+          new Notice(t('eyeCare.default'));
+        }
       }
     }, { passive: false });
 
@@ -1276,6 +1244,9 @@ class SwiftSwitchPlugin extends Plugin {
         if (styleEl) styleEl.remove();
         this.settings.floatingButton = null;
         await this.saveSettings();
+        const popupEl = document.getElementById('ss-snippets-popup');
+        const ms = popupEl?.querySelector('.ss-mode-switch');
+        if (ms) ms.style.display = 'inline-flex';
       });
 
       document.body.appendChild(menu);
@@ -2045,8 +2016,10 @@ class SwiftSwitchPlugin extends Plugin {
       });
 
       const modeSwitch = rightControls.createDiv();
+      modeSwitch.className = 'ss-mode-switch';
+      const hasFloatingBtn = !!this.settings.floatingButton;
       modeSwitch.style.cssText = `
-        display:inline-flex;align-items:center;justify-content:center;
+        display:${hasFloatingBtn ? 'none' : 'inline-flex'};align-items:center;justify-content:center;
         width:18px;height:18px;border-radius:50%;cursor:pointer;user-select:none;
         transition:all 0.15s ease;touch-action:none;position:relative;
         background:${isDark ? 'linear-gradient(135deg,#ff9a3c,#ffe44d)' : 'linear-gradient(135deg,#c8c8c8,#e8e8e8)'};
@@ -2138,6 +2111,7 @@ class SwiftSwitchPlugin extends Plugin {
           }
           this.settings.floatingButton = null;
           await this.saveSettings();
+          modeSwitch.style.display = 'inline-flex';
         } else {
           const popupEl = document.getElementById('ss-snippets-popup');
           let fbX = window.innerWidth - 80;
@@ -2153,6 +2127,7 @@ class SwiftSwitchPlugin extends Plugin {
           };
           await this.saveSettings();
           this.createFloatingButton();
+          modeSwitch.style.display = 'none';
         }
       });
 
@@ -2266,140 +2241,30 @@ class SwiftSwitchPlugin extends Plugin {
 
     renderThemes();
 
-    // ── 护眼色 chips ──────────────────────────────────────────────────
+    // ── 背景分组 ──────────────────────────────────────────────────
     const eyeCareArea = popup.createDiv();
     eyeCareArea.style.cssText = 'margin-bottom:12px;';
 
-    let _renderImgArea = null;
-    const renderEyeCare = () => {
+    const BG_GROUP_KEY = '__bg__';
+
+    const renderEyeCare = async () => {
       eyeCareArea.empty();
-      const currentKey = this.settings.eyeCareColor || '';
 
-      const label = eyeCareArea.createEl('div', { text: t('eyeCare.section') });
-      label.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);margin-bottom:6px;';
+      const headerRow = eyeCareArea.createDiv();
+      headerRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
 
-      const chipsRow = eyeCareArea.createDiv();
-      chipsRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+      const label = headerRow.createEl('div', { text: t('eyeCare.section') + '/' + t('eyeCare.imgTitle') });
+      label.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);';
 
-      const presets = this._eyeCarePresets().filter(p => p.pattern !== 'image');
-      const isDarkChip = document.body.classList.contains('theme-dark');
-      presets.forEach(p => {
-        const chip = chipsRow.createEl('span');
-        const isActive = currentKey === p.key;
-        chip.style.cssText = `
-          display:inline-flex;align-items:center;gap:4px;
-          padding:3px 8px;border-radius:14px;font-size:11px;cursor:pointer;
-          user-select:none;transition:all 0.15s ease;
-          border:1px solid ${isActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
-          background:${isActive ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)'};
-          color:${isActive ? '#fff' : 'var(--text-muted)'};
-        `;
-        const dotColor = isDarkChip ? (p.darkColor || p.color) : p.color;
-        const dotBorder = isDarkChip ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)';
-        const dot = chip.createEl('span');
-        if (p.pattern === 'linen') {
-          const lc = isDarkChip ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)';
-          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:repeating-linear-gradient(0deg,transparent,transparent 2px,${lc} 2px,${lc} 3px),repeating-linear-gradient(90deg,transparent,transparent 2px,${lc} 2px,${lc} 3px);`;
-        } else if (p.pattern === 'dot') {
-          const dc = isDarkChip ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.12)';
-          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:radial-gradient(circle,${dc} 1px,transparent 1px);background-size:4px 4px;`;
-        } else if (p.pattern === 'grid') {
-          const gc = isDarkChip ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:linear-gradient(${gc} 1px,transparent 1px),linear-gradient(90deg,${gc} 1px,transparent 1px);background-size:4px 4px;`;
-        } else if (p.pattern === 'stripe') {
-          const sc = isDarkChip ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:repeating-linear-gradient(-45deg,transparent,transparent 2px,${sc} 2px,${sc} 2.5px);`;
-        } else if (p.pattern === 'aurora') {
-          if (isDarkChip) {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:linear-gradient(135deg,rgba(80,180,130,0.35),rgba(80,130,200,0.35),rgba(150,80,190,0.25));border:1px solid ${dotBorder};flex-shrink:0;`;
-          } else {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:linear-gradient(135deg,rgba(100,200,150,0.3),rgba(100,150,200,0.3),rgba(150,100,200,0.2));border:1px solid ${dotBorder};flex-shrink:0;`;
-          }
-        } else if (p.pattern === 'honeycomb') {
-          const hcc = isDarkChip ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
-          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:linear-gradient(30deg,${hcc} 12%,transparent 12.5%,transparent 87%,${hcc} 87.5%),linear-gradient(150deg,${hcc} 12%,transparent 12.5%,transparent 87%,${hcc} 87.5%);background-size:6px 10px;`;
-        } else if (p.pattern === 'waves') {
-          const wcc = isDarkChip ? 'rgba(100,160,220,0.25)' : 'rgba(60,130,200,0.2)';
-          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:radial-gradient(ellipse at 50% 0%,${wcc},transparent 60%),radial-gradient(ellipse at 50% 100%,${wcc},transparent 60%);background-size:8px 5px;`;
-        } else if (p.pattern === 'diamond') {
-          const dcc = isDarkChip ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
-          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:linear-gradient(45deg,${dcc} 25%,transparent 25%),linear-gradient(-45deg,${dcc} 25%,transparent 25%),linear-gradient(45deg,transparent 75%,${dcc} 75%),linear-gradient(-45deg,transparent 75%,${dcc} 75%);background-size:5px 5px;background-position:0 0,0 3px,3px -3px,-3px 0;`;
-        } else if (p.pattern === 'noise') {
-          const ncc = isDarkChip ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)';
-          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:radial-gradient(circle,${ncc} 0.5px,transparent 0.5px);background-size:2px 2px,3px 3px;`;
-        } else if (p.pattern === 'paper') {
-          const ppc = isDarkChip ? 'rgba(255,240,200,0.1)' : 'rgba(180,160,120,0.1)';
-          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:repeating-linear-gradient(0deg,transparent,transparent 2px,${ppc} 2px,${ppc} 3px),repeating-linear-gradient(90deg,transparent,transparent 3px,${ppc} 3px,${ppc} 4px);`;
-        } else if (p.pattern === 'crosshatch') {
-          const xcc = isDarkChip ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
-          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;background-image:repeating-linear-gradient(45deg,transparent,transparent 2px,${xcc} 2px,${xcc} 3px),repeating-linear-gradient(-45deg,transparent,transparent 2px,${xcc} 2px,${xcc} 3px);`;
-        } else if (p.pattern === 'breathe') {
-          if (isDarkChip) {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(80,180,130,0.5),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
-          } else {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(100,180,130,0.4),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
-          }
-        } else if (p.pattern === 'breathe478') {
-          if (isDarkChip) {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(80,180,130,0.5),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe478 3s ease-in-out infinite;`;
-          } else {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(100,180,130,0.4),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe478 3s ease-in-out infinite;`;
-          }
-        } else if (p.pattern === 'breatheBox') {
-          if (isDarkChip) {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(80,180,130,0.5),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breatheBox 2.5s ease-in-out infinite;`;
-          } else {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:radial-gradient(ellipse at 50% 50%,rgba(100,180,130,0.4),transparent);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breatheBox 2.5s ease-in-out infinite;`;
-          }
-        } else if (p.pattern === 'edgeGlow') {
-          if (isDarkChip) {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:transparent;border:2px solid rgba(80,180,130,0.5);box-shadow:0 0 3px rgba(80,180,130,0.4);flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
-          } else {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:2px;background:transparent;border:2px solid rgba(100,200,150,0.4);box-shadow:0 0 3px rgba(100,200,150,0.3);flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
-          }
-        } else if (p.pattern === 'cursorGlow') {
-          if (isDarkChip) {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 40% 40%,rgba(80,180,130,0.6),transparent 70%);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
-          } else {
-            dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 40% 40%,rgba(100,200,150,0.5),transparent 70%);border:1px solid ${dotBorder};flex-shrink:0;animation:ss-dot-breathe 2s ease-in-out infinite;`;
-          }
-        } else {
-          dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;background:${dotColor};border:1px solid ${dotBorder};flex-shrink:0;`;
-        }
-        chip.createEl('span', { text: p.label });
-        const hintKey = 'eyeCare.' + p.key + '.hint';
-        if (i18n[_currentLang] && i18n[_currentLang].hasOwnProperty(hintKey)) {
-          chip.title = t(hintKey);
-        }
-        chip.addEventListener('click', async () => {
-          this.settings.eyeCareColor = p.key;
-          this.applyEyeCareColor();
-          await this.saveSettings();
-          renderEyeCare();
-        });
-      });
-      // 重新渲染图片区域（因为 empty() 清除了）
-      if (_renderImgArea) _renderImgArea();
-    };
+      const shareLink = headerRow.createEl('a');
+      shareLink.textContent = _currentLang === 'zh' ? '分享/更多' : 'Share/More';
+      shareLink.href = 'https://github.com/dlsdgj/Obsidian-SwiftSnippets/discussions/2';
+      shareLink.target = '_blank';
+      shareLink.style.cssText = 'font-size:10px;color:var(--text-muted);text-decoration:none;margin-left:auto;opacity:0.6;transition:opacity 0.15s ease;';
+      shareLink.addEventListener('mouseenter', () => { shareLink.style.opacity = '1'; shareLink.style.color = 'var(--interactive-accent)'; });
+      shareLink.addEventListener('mouseleave', () => { shareLink.style.opacity = '0.6'; shareLink.style.color = 'var(--text-muted)'; });
 
-    // ── 图片背景区（自动从 pic 文件夹加载）──
-    const imgArea = eyeCareArea;
-
-    const renderImgArea = () => {
-      const oldImgSection = imgArea.querySelector('.ss-img-section');
-      if (oldImgSection) oldImgSection.remove();
-      const imgs = this.settings.bgImages || [];
-      if (imgs.length === 0) return;
-      const section = imgArea.createDiv({ cls: 'ss-img-section' });
-      section.style.cssText = 'margin-top:8px;padding-top:8px;border-top:1px solid var(--background-modifier-border);';
-
-      // 标题行：背景-图片 ? [透明度] [平铺]
-      const titleRow = section.createDiv();
-      titleRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;';
-      const titleEl = titleRow.createEl('span', { text: t('eyeCare.imgTitle') });
-      titleEl.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);';
-      // ? 提示（可点击打开文件夹）
-      const helpEl = titleRow.createEl('span', { text: '?' });
+      const helpEl = headerRow.createEl('span', { text: '?' });
       helpEl.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;font-size:10px;font-weight:700;background:var(--background-modifier-border);color:var(--text-muted);cursor:pointer;flex-shrink:0;transition:all 0.15s ease;';
       helpEl.setAttribute('title', t('eyeCare.imgHelp') + '\n' + t('eyeCare.imgOpenFolder'));
       helpEl.addEventListener('mouseenter', () => {
@@ -2429,19 +2294,15 @@ class SwiftSwitchPlugin extends Plugin {
         }
       });
 
-      // 选中图片时，透明度和平铺控件显示在标题后
-      const activeIdx = this.settings.eyeCareColor?.startsWith('__img_') ? parseInt(this.settings.eyeCareColor.slice(6), 10) : -1;
-      const activeImg = activeIdx >= 0 ? imgs[activeIdx] : null;
+      const activeImgIdx = this.settings.eyeCareColor?.startsWith('__img_') ? parseInt(this.settings.eyeCareColor.slice(6), 10) : -1;
+      const activeImg = activeImgIdx >= 0 ? (this.settings.bgImages || [])[activeImgIdx] : null;
       if (activeImg) {
-        const sep = titleRow.createEl('span', { text: '·' });
-        sep.style.cssText = 'color:var(--text-faint);';
-        // 透明度
-        const opLabel = titleRow.createEl('span', { text: t('eyeCare.imgOpacity') });
+        const opLabel = headerRow.createEl('span', { text: t('eyeCare.imgOpacity') });
         opLabel.style.cssText = 'font-size:10px;color:var(--text-muted);white-space:nowrap;';
-        const slider = titleRow.createEl('input', { type: 'range' });
+        const slider = headerRow.createEl('input', { type: 'range' });
         slider.min = '5'; slider.max = '100'; slider.value = String(Math.round((activeImg.opacity ?? 0.3) * 100));
         slider.style.cssText = 'width:70px;cursor:pointer;height:4px;';
-        const valSpan = titleRow.createEl('span', { text: Math.round((activeImg.opacity ?? 0.3) * 100) + '%' });
+        const valSpan = headerRow.createEl('span', { text: Math.round((activeImg.opacity ?? 0.3) * 100) + '%' });
         valSpan.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
         slider.addEventListener('input', async () => {
           const v = parseInt(slider.value) / 100;
@@ -2450,8 +2311,7 @@ class SwiftSwitchPlugin extends Plugin {
           await this.saveSettings();
           this.applyEyeCareColor();
         });
-        // 平铺
-        const tileBtn = titleRow.createEl('span');
+        const tileBtn = headerRow.createEl('span');
         const isTile = activeImg.tile ?? false;
         tileBtn.style.cssText = `font-size:10px;padding:1px 6px;border-radius:8px;cursor:pointer;border:1px solid ${isTile ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};background:${isTile ? 'var(--interactive-accent)' : 'var(--background-primary)'};color:${isTile ? '#fff' : 'var(--text-muted)'};user-select:none;`;
         tileBtn.textContent = t('eyeCare.imgTile');
@@ -2463,13 +2323,33 @@ class SwiftSwitchPlugin extends Plugin {
         });
       }
 
-      // 图片 chip 列表（药丸形）
-      const listEl = section.createDiv();
-      listEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;';
+      const chipsContainer = eyeCareArea.createDiv();
+      chipsContainer.className = 'ss-group-chips';
+      chipsContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:4px;border-radius:6px;border:1px dashed var(--background-modifier-border);transition:border-color 0.15s ease;';
 
-      // 悬浮预览容器（单个，复用）
+      const bgMembers = this.settings.groups[BG_GROUP_KEY] || [];
+      const { enabledSnippets, snippetFiles } = await this.getSnippetInfo();
+      for (let i = bgMembers.length - 1; i >= 0; i--) {
+        if (!snippetFiles.includes(bgMembers[i])) bgMembers.splice(i, 1);
+      }
+      const isEnabled = (name) => enabledSnippets.includes(name);
+
+      bgMembers.forEach(snippetName => {
+        this._createChip(chipsContainer, snippetName, isEnabled(snippetName), BG_GROUP_KEY, async () => {
+          if (enabledSnippets.includes(snippetName) && this.settings.eyeCareColor) {
+            this.settings.eyeCareColor = '';
+            this.applyEyeCareColor();
+            await this.saveSettings();
+          }
+          renderEyeCare();
+          renderContent();
+        });
+      });
+
+      // 图片 chips
+      const imgs = this.settings.bgImages || [];
       let previewEl = document.getElementById('ss-img-preview');
-      if (!previewEl) {
+      if (!previewEl && imgs.length > 0) {
         previewEl = document.createElement('div');
         previewEl.id = 'ss-img-preview';
         previewEl.style.cssText = 'position:fixed;z-index:10001;pointer-events:none;opacity:0;transition:opacity 0.15s ease;border-radius:6px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.3);border:1px solid var(--background-modifier-border);';
@@ -2484,7 +2364,6 @@ class SwiftSwitchPlugin extends Plugin {
         const rect = chipEl.getBoundingClientRect();
         previewEl.style.left = rect.left + 'px';
         previewEl.style.top = (rect.top - 170) + 'px';
-        // 如果超出顶部，显示在下方
         requestAnimationFrame(() => {
           const pRect = previewEl.getBoundingClientRect();
           if (pRect.top < 4) {
@@ -2493,15 +2372,12 @@ class SwiftSwitchPlugin extends Plugin {
         });
         previewEl.style.opacity = '1';
       };
-      const hidePreview = () => {
-        previewEl.style.opacity = '0';
-      };
+      const hidePreview = () => { previewEl.style.opacity = '0'; };
 
       imgs.forEach((img, idx) => {
         const isActive = this.settings.eyeCareColor === `__img_${idx}`;
-        const chip = listEl.createDiv();
+        const chip = chipsContainer.createDiv();
         chip.style.cssText = `display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid ${isActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};background:${isActive ? 'var(--interactive-accent)' : 'var(--background-primary)'};color:${isActive ? '#fff' : 'var(--text-normal)'};max-width:150px;transition:border-color 0.15s,background 0.15s,color 0.15s;`;
-        // 缩略图小圆
         const picDir = this._getPluginDir();
         const fullPath = nodePath.join(picDir, 'pic', img.url);
         let dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#6c9,#69c);`;
@@ -2513,42 +2389,33 @@ class SwiftSwitchPlugin extends Plugin {
           const mime = mimeMap[ext] || 'image/png';
           chipDataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
           dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:url('${chipDataUrl}') center/cover;`;
-        } catch (e) { /* fallback */ }
+        } catch (e) {}
         const dot = chip.createEl('span');
         dot.style.cssText = dotStyle;
         const nameEl = chip.createEl('span', { text: img.label || img.url });
         nameEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-        // 点击切换选中
-        chip.addEventListener('click', () => {
+        chip.addEventListener('click', async () => {
           if (this.settings.eyeCareColor === `__img_${idx}`) {
             this.settings.eyeCareColor = '';
           } else {
             this.settings.eyeCareColor = `__img_${idx}`;
+            for (const name of bgMembers) {
+              this._setSnippetEnabled(name, false);
+            }
           }
           this.applyEyeCareColor();
-          this.saveSettings();
+          await this.saveSettings();
           renderEyeCare();
+          renderContent();
         });
-        // 悬浮预览
-        chip.addEventListener('mouseenter', () => {
-          if (chipDataUrl) showPreview(chipDataUrl, chip);
-        });
-        chip.addEventListener('mouseleave', () => {
-          hidePreview();
-        });
-        // 右键菜单：重命名、旋转、删除
+        chip.addEventListener('mouseenter', () => { if (chipDataUrl) showPreview(chipDataUrl, chip); });
+        chip.addEventListener('mouseleave', () => { hidePreview(); });
         chip.addEventListener('contextmenu', (e) => {
           e.preventDefault();
           e.stopPropagation();
           hidePreview();
-
           const menu = document.createElement('div');
-          menu.style.cssText = `
-            position:fixed;left:${e.clientX}px;top:${e.clientY}px;
-            background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-            border:1px solid var(--background-modifier-border);border-radius:6px;
-            padding:4px 0;z-index:10001;box-shadow:0 4px 16px rgba(0,0,0,0.25);min-width:120px;
-          `;
+          menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--background-modifier-border);border-radius:6px;padding:4px 0;z-index:10001;box-shadow:0 4px 16px rgba(0,0,0,0.25);min-width:120px;`;
           const mkItem = (label, action) => {
             const item = document.createElement('div');
             item.textContent = label;
@@ -2558,8 +2425,6 @@ class SwiftSwitchPlugin extends Plugin {
             item.addEventListener('click', async () => { menu.remove(); await action(); });
             menu.appendChild(item);
           };
-
-          // 重命名
           mkItem(t('eyeCare.imgRename'), async () => {
             const newName = await this._promptGroupName(img.url, t('eyeCare.imgRenameTitle'));
             if (newName && newName !== img.url) {
@@ -2577,8 +2442,6 @@ class SwiftSwitchPlugin extends Plugin {
               } catch (_e) { new Notice(t('eyeCare.imgRenameFailed')); }
             }
           });
-
-          // 旋转
           mkItem(t('eyeCare.imgRotate'), async () => {
             try {
               await this._rotateImage(img.url);
@@ -2587,26 +2450,18 @@ class SwiftSwitchPlugin extends Plugin {
               new Notice(t('eyeCare.imgRotated'));
             } catch (_e) { new Notice(t('eyeCare.imgRotateFailed')); }
           });
-
-          // 删除
           mkItem(t('eyeCare.imgDelete'), async () => {
             try {
               const delPath = nodePath.join(picDir, 'pic', img.url);
-              if (nodeFs.existsSync(delPath)) {
-                nodeFs.unlinkSync(delPath);
-              }
-              // 更新 settings
+              if (nodeFs.existsSync(delPath)) nodeFs.unlinkSync(delPath);
               const imgs2 = this.settings.bgImages || [];
               const delIdx = imgs2.findIndex(i => i.url === img.url);
               if (delIdx >= 0) imgs2.splice(delIdx, 1);
-              // 修正 eyeCareColor 索引
               if (this.settings.eyeCareColor === `__img_${delIdx}`) {
                 this.settings.eyeCareColor = '';
               } else if (this.settings.eyeCareColor?.startsWith('__img_')) {
                 const curIdx = parseInt(this.settings.eyeCareColor.slice(6), 10);
-                if (curIdx > delIdx) {
-                  this.settings.eyeCareColor = `__img_${curIdx - 1}`;
-                }
+                if (curIdx > delIdx) this.settings.eyeCareColor = `__img_${curIdx - 1}`;
               }
               await this.saveSettings();
               this.applyEyeCareColor();
@@ -2614,16 +2469,33 @@ class SwiftSwitchPlugin extends Plugin {
               new Notice(t('eyeCare.imgDeleted'));
             } catch (_e) { new Notice('Delete failed'); }
           });
-
           document.body.appendChild(menu);
           const closeMenu = () => { if (document.body.contains(menu)) menu.remove(); document.removeEventListener('click', closeMenu); };
           setTimeout(() => document.addEventListener('click', closeMenu), 10);
         });
       });
+
+      chipsContainer.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        chipsContainer.style.borderColor = 'var(--interactive-accent)';
+      });
+      chipsContainer.addEventListener('dragleave', () => {
+        chipsContainer.style.borderColor = 'var(--background-modifier-border)';
+      });
+      chipsContainer.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        chipsContainer.style.borderColor = 'var(--background-modifier-border)';
+        if (!this._dragData) return;
+        const snippetName = this._dragData.snippetName;
+        this._dragData = null;
+        await this._moveToGroup(snippetName, BG_GROUP_KEY);
+        renderEyeCare();
+        renderContent();
+      });
     };
 
-    _renderImgArea = renderImgArea;
-    renderEyeCare(); // renderEyeCare 内部会调用 _renderImgArea()
+    renderEyeCare();
 
     // ── 内容区域 ──────────────────────────────────────────────────────
     const contentArea = popup.createDiv();
@@ -2636,6 +2508,7 @@ class SwiftSwitchPlugin extends Plugin {
       popup._ssRenderContent = renderContent;
       contentArea.empty();
       const { enabledSnippets, snippetFiles } = await this.getSnippetInfo();
+
 
       if (snippetFiles.length === 0) {
         const hint = contentArea.createEl('span');
@@ -2655,7 +2528,8 @@ class SwiftSwitchPlugin extends Plugin {
       const isEnabled = (name) => enabledSnippets.includes(name);
 
       // ── 渲染各分组 ────────────────────────────────────────────────
-      const orderedGroups = this.settings.groupOrder.filter(g => this.settings.groups[g]);
+      const bgGroupName = '__bg__';
+      const orderedGroups = this.settings.groupOrder.filter(g => this.settings.groups[g] && g !== bgGroupName);
 
       for (const gName of orderedGroups) {
         const members = this.settings.groups[gName];
@@ -3151,6 +3025,12 @@ class SwiftSwitchPlugin extends Plugin {
       }
       this._setSnippetEnabled(snippetName, !chipEnabled);
 
+      if (!chipEnabled && currentGroup === '__bg__' && this.settings.eyeCareColor) {
+        this.settings.eyeCareColor = '';
+        this.applyEyeCareColor();
+        this.saveSettings();
+      }
+
       chipEnabled = !chipEnabled;
       applyStyle(chipEnabled);
       new Notice(snippetName + ' ' + t('snippet.toggled'));
@@ -3291,10 +3171,32 @@ class SwiftSwitchPlugin extends Plugin {
 
       // 移出分组
       if (currentGroup) {
-        mkItem(t('context.removeFromGroup'), async () => {
-          await this._removeFromGroup(snippetName);
-          rerender();
-        });
+        if (currentGroup === '__bg__') {
+          mkItem(t('context.delete'), async () => {
+            if (confirm(t('context.delete') + ' "' + snippetName + '"?')) {
+              if (chipEnabled) {
+                this._setSnippetEnabled(snippetName, false);
+              }
+              const snippetPath = '.obsidian/snippets/' + snippetName + '.css';
+              const jsSnippetPath = '.obsidian/snippets/' + snippetName + '.js';
+              let deleted = false;
+              try { await this.app.vault.adapter.remove(snippetPath); deleted = true; } catch (_e) {}
+              if (!deleted) { try { await this.app.vault.adapter.remove(jsSnippetPath); } catch (_e) {} }
+              const members = this.settings.groups[currentGroup];
+              if (members) {
+                const idx = members.indexOf(snippetName);
+                if (idx !== -1) members.splice(idx, 1);
+              }
+              await this.saveSettings();
+              rerender();
+            }
+          });
+        } else {
+          mkItem(t('context.removeFromGroup'), async () => {
+            await this._removeFromGroup(snippetName);
+            rerender();
+          });
+        }
       }
 
       document.body.appendChild(menu);

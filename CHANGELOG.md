@@ -1,4 +1,14 @@
-## 🆕 v1.0.9 (2026-06-25)
+## 🆕 v1.1.0 (2026-06-25)
+
+- **Eye Care Presets as CSS Snippets / 护眼色预设导出为CSS片段** — Exported all 22 eye care presets (colors + patterns) to `.obsidian/snippets/ss-*.css` files with `.theme-dark`/`.theme-light` selectors for automatic dark/light mode adaptation / 将22个护眼色预设（纯色+图案）导出为 `.obsidian/snippets/ss-*.css` 文件，使用 `.theme-dark`/`.theme-light` 选择器自动适配深浅模式
+- **Background/Image Unified Group / 背景图片统一分组** — Merged background colors and image backgrounds into a single "Background/Image" group with mutual exclusion; drag snippets in from other groups / 将背景色和图片背景合并为统一的"背景/图片"分组，互斥切换；支持从其他分组拖入snippet
+- **Mode Switch Visibility / 模式开关可见性** — Dark/light mode toggle in popup header now hides when floating button is active, reappears when floating button is closed / 管理面板中的深浅模式开关在有悬浮按钮时隐藏，关闭悬浮按钮后显示
+- **Exclusive Background Group / 背景分组互斥** — Background/Image group is exclusive by default; enabling one snippet disables others; selecting an image disables all snippets and vice versa / 背景分组默认互斥，启用一个snippet自动禁用其他；选中图片时禁用所有snippet
+- **Language-Safe Group Key / 语言安全分组键** — Background group uses fixed `__bg__` key instead of localized name, preventing duplicate groups on language switch; auto-migrates old groups / 背景分组使用固定 `__bg__` 键而非本地化名称，避免语言切换时重复生成分组；自动迁移旧分组
+- **Delete from Background Group / 从背景分组删除** — Deleting a snippet from the Background/Image group now removes the file entirely instead of moving it to "Ungrouped" / 从背景/图片分组删除snippet时直接删除文件，而非移到"未分组"
+- **Share/More Link / 分享链接** — Added a "Share/More" link in the Background/Image section header linking to GitHub Discussions / 在背景/图片标题栏添加"分享/更多"链接至GitHub Discussions
+
+## v1.0.9 (2026-06-25)
 
 - **Open Folder Fix / 打开文件夹修复** — Fixed "open background image folder" button not working; switched from `electron.shell` to `child_process.exec` / 修复"打开背景图片文件夹"按钮点击无效，改用 `child_process.exec` 调用系统命令
 - **Header Bar Redesign / 标题栏重设计** — Removed standalone white header bar; header now flows naturally with popup content, no more floating white strip or content clipping / 移除独立白色标题栏，标题栏融入面板内容流，不再悬浮白条或遮挡内容
