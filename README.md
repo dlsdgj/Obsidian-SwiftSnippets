@@ -50,6 +50,15 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 <details>
 <summary>Changelog</summary>
 
+### v1.1.1 (2026-06-25)
+
+- **Dark/Light Image Auto-Switch** — Background images with `-light`/`-dark` suffix (e.g. `田-light.png` + `田-dark.png`) auto-switch when toggling dark/light mode
+- **Paired Image Chips** — Paired light/dark images merge into a single chip with a rotating yin-yang icon and base name only
+- **Floating Button Wheel** — Scroll wheel on floating button now cycles through both CSS snippets and background images
+- **Delete Preset Persistence** — Deleted `ss-` preset snippets are remembered; no longer recreated on plugin reload
+- **No Delete Confirmation** — Removed confirm dialog when deleting snippet chips
+- **Default Panel Width** — Management popup starts at 480px width instead of full viewport; still resizable via drag handle
+
 ### v1.1.0 (2026-06-25)
 
 - **Eye Care Presets as CSS Snippets** — Exported all 22 eye care presets (colors + patterns) to `.obsidian/snippets/ss-*.css` files with `.theme-dark`/`.theme-light` selectors for automatic dark/light mode adaptation

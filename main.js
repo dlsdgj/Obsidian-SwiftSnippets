@@ -365,6 +365,7 @@ class SwiftSwitchPlugin extends Plugin {
       styleMemory: false,   // 记忆模式开关
       pageStyles: {},       // { filePath: { theme, isDark, eyeCareColor, enabledSnippets } }
       exclusiveGroups: ['标题'], // 互斥分组名列表，同组 snippet 不能同时开启
+      deletedPresets: [],        // 用户删除的预设 key，不再自动重建
     }, data);
   }
 
@@ -493,7 +494,8 @@ class SwiftSwitchPlugin extends Plugin {
       const imgItem = (this.settings.bgImages || [])[imgIdx];
       if (!imgItem) { styleEl.textContent = ''; return; }
       const picDir = this._getPluginDir();
-      const fullPath = nodePath.join(picDir, 'pic', imgItem.url);
+      const resolvedUrl = this._resolveImageForMode(imgItem);
+      const fullPath = nodePath.join(picDir, 'pic', resolvedUrl);
       let imgUrl = '';
       try {
         const buf = nodeFs.readFileSync(fullPath);
@@ -608,15 +610,36 @@ class SwiftSwitchPlugin extends Plugin {
     this._stopCursorTracking();
   }
 
+  _resolveImageForMode(imgItem) {
+    if (imgItem.paired && imgItem.urlDark) {
+      const isDark = document.body.classList.contains('theme-dark');
+      return isDark ? imgItem.urlDark : imgItem.url;
+    }
+    const imgFileName = imgItem.url;
+    const picDir = nodePath.join(this._getPluginDir(), 'pic');
+    const isDark = document.body.classList.contains('theme-dark');
+    const ext = nodePath.extname(imgFileName);
+    const base = nodePath.basename(imgFileName, ext);
+    const suffix = isDark ? '-dark' : '-light';
+    const oppositeSuffix = isDark ? '-light' : '-dark';
+    if (base.endsWith('-light') || base.endsWith('-dark')) {
+      const targetBase = base.endsWith(suffix) ? base : base.replace(new RegExp('\\' + oppositeSuffix + '$'), suffix);
+      const targetFile = targetBase + ext;
+      if (nodeFs.existsSync(nodePath.join(picDir, targetFile))) return targetFile;
+      return imgFileName;
+    }
+    const themedFile = base + suffix + ext;
+    if (nodeFs.existsSync(nodePath.join(picDir, themedFile))) return themedFile;
+    return imgFileName;
+  }
+
   _getPluginDir() {
-    // 优先使用 basePath 构建，fallback 到 manifest.dir
     if (this.app && this.app.vault && this.app.vault.adapter && this.app.vault.adapter.basePath) {
       return nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'plugins', 'SwiftSnippets');
     }
     if (this.manifest && this.manifest.dir) {
       return this.manifest.dir;
     }
-    // 最后 fallback：从 __dirname 获取
     return __dirname;
   }
 
@@ -733,6 +756,7 @@ class SwiftSwitchPlugin extends Plugin {
     };
 
     for (const [key, p] of Object.entries(allPresets)) {
+      if ((this.settings.deletedPresets || []).includes(key)) continue;
       const fileName = `ss-${key}.css`;
       const filePath = nodePath.join(snippetsDir, fileName);
 
@@ -810,18 +834,72 @@ class SwiftSwitchPlugin extends Plugin {
       const imgExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
       const files = nodeFs.readdirSync(picDir).filter(f => imgExts.some(ext => f.toLowerCase().endsWith(ext)));
       console.log('[SwiftSnippets] picDir:', picDir, 'files:', files.length);
-      // 保留用户自定义的 opacity 和 tile，新增图片默认 opacity 0.3
       const existingMap = {};
       (this.settings.bgImages || []).forEach(img => {
         existingMap[img.label] = { opacity: img.opacity ?? 0.3, tile: img.tile ?? false };
       });
-      this.settings.bgImages = files.map(f => ({
-        type: 'local',
-        url: f,
-        label: f,
-        opacity: existingMap[f]?.opacity ?? 0.3,
-        tile: existingMap[f]?.tile ?? false,
-      }));
+      const fileSet = new Set(files);
+      const paired = new Set();
+      const result = [];
+      for (const f of files) {
+        const ext = nodePath.extname(f);
+        const base = nodePath.basename(f, ext);
+        if (base.endsWith('-light')) {
+          const root = base.slice(0, -6);
+          const darkFile = root + '-dark' + ext;
+          if (fileSet.has(darkFile)) {
+            paired.add(f);
+            paired.add(darkFile);
+            const label = root;
+            result.push({
+              type: 'local',
+              url: f,
+              urlDark: darkFile,
+              label: label,
+              opacity: existingMap[label]?.opacity ?? 0.3,
+              tile: existingMap[label]?.tile ?? false,
+              paired: true,
+            });
+          }
+        }
+      }
+      for (const f of files) {
+        if (paired.has(f)) continue;
+        const ext = nodePath.extname(f);
+        const base = nodePath.basename(f, ext);
+        if (base.endsWith('-dark')) {
+          const root = base.slice(0, -5);
+          const lightFile = root + '-light' + ext;
+          if (fileSet.has(lightFile)) {
+            paired.add(f);
+            paired.add(lightFile);
+            const label = root;
+            const exists = result.some(r => r.label === label && r.paired);
+            if (!exists) {
+              result.push({
+                type: 'local',
+                url: lightFile,
+                urlDark: f,
+                label: label,
+                opacity: existingMap[label]?.opacity ?? 0.3,
+                tile: existingMap[label]?.tile ?? false,
+                paired: true,
+              });
+            }
+          }
+        }
+      }
+      for (const f of files) {
+        if (paired.has(f)) continue;
+        result.push({
+          type: 'local',
+          url: f,
+          label: f,
+          opacity: existingMap[f]?.opacity ?? 0.3,
+          tile: existingMap[f]?.tile ?? false,
+        });
+      }
+      this.settings.bgImages = result;
       this.saveSettings();
     } catch (e) {
       console.warn('[SwiftSnippets] Failed to sync pic folder:', e);
@@ -1131,22 +1209,45 @@ class SwiftSwitchPlugin extends Plugin {
       } else {
         const bgGroupName = '__bg__';
         const bgMembers = this.settings.groups[bgGroupName] || [];
-        if (bgMembers.length === 0) return;
+        const bgImgs = this.settings.bgImages || [];
+        if (bgMembers.length === 0 && bgImgs.length === 0) return;
         const { enabledSnippets } = await this.getSnippetInfo();
         const enabledBg = bgMembers.filter(n => enabledSnippets.includes(n));
         const currentIdx = bgMembers.indexOf(enabledBg[enabledBg.length - 1] || '');
-        let nextIdx;
+        const currentImgIdx = this.settings.eyeCareColor?.startsWith('__img_') ? parseInt(this.settings.eyeCareColor.slice(6), 10) : -1;
+        const items = [];
+        bgMembers.forEach((name, i) => items.push({ type: 'snippet', name, idx: i }));
+        bgImgs.forEach((_, i) => items.push({ type: 'img', idx: i }));
+        let activeItemIdx = -1;
+        if (currentImgIdx >= 0) {
+          activeItemIdx = items.findIndex(it => it.type === 'img' && it.idx === currentImgIdx);
+        } else if (currentIdx >= 0) {
+          activeItemIdx = items.findIndex(it => it.type === 'snippet' && it.idx === currentIdx);
+        }
+        let nextItemIdx;
         if (e.deltaY > 0) {
-          nextIdx = currentIdx < bgMembers.length - 1 ? currentIdx + 1 : -1;
+          nextItemIdx = activeItemIdx < items.length - 1 ? activeItemIdx + 1 : -1;
         } else {
-          nextIdx = currentIdx > 0 ? currentIdx - 1 : -1;
+          nextItemIdx = activeItemIdx > 0 ? activeItemIdx - 1 : -1;
         }
         for (const name of enabledBg) {
           this._setSnippetEnabled(name, false);
         }
-        if (nextIdx >= 0) {
-          this._setSnippetEnabled(bgMembers[nextIdx], true);
-          new Notice(bgMembers[nextIdx]);
+        if (this.settings.eyeCareColor?.startsWith('__img_')) {
+          this.settings.eyeCareColor = '';
+          this.applyEyeCareColor();
+        }
+        if (nextItemIdx >= 0) {
+          const nextItem = items[nextItemIdx];
+          if (nextItem.type === 'snippet') {
+            this._setSnippetEnabled(nextItem.name, true);
+            new Notice(nextItem.name);
+          } else {
+            this.settings.eyeCareColor = `__img_${nextItem.idx}`;
+            this.applyEyeCareColor();
+            await this.saveSettings();
+            new Notice(bgImgs[nextItem.idx].label || bgImgs[nextItem.idx].url);
+          }
         } else {
           new Notice(t('eyeCare.default'));
         }
@@ -1874,7 +1975,7 @@ class SwiftSwitchPlugin extends Plugin {
       background:rgba(var(--mono-rgb-0),0.75);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);
       border:1px solid rgba(255,255,255,0.12);border-radius:12px;
       box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;
-      padding:16px 20px;min-width:360px;min-height:200px;max-width:95vw;max-height:90vh;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;
+      padding:16px 20px;min-width:360px;min-height:200px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;
     `;
     // 恢复保存的大小
     if (this.settings.popupSize) {
@@ -2379,19 +2480,44 @@ class SwiftSwitchPlugin extends Plugin {
         const chip = chipsContainer.createDiv();
         chip.style.cssText = `display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid ${isActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};background:${isActive ? 'var(--interactive-accent)' : 'var(--background-primary)'};color:${isActive ? '#fff' : 'var(--text-normal)'};max-width:150px;transition:border-color 0.15s,background 0.15s,color 0.15s;`;
         const picDir = this._getPluginDir();
-        const fullPath = nodePath.join(picDir, 'pic', img.url);
-        let dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#6c9,#69c);`;
+        const isPaired = !!img.paired;
+        let dotStyle = '';
         let chipDataUrl = '';
-        try {
-          const buf = nodeFs.readFileSync(fullPath);
-          const ext = nodePath.extname(fullPath).toLowerCase();
-          const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml' };
-          const mime = mimeMap[ext] || 'image/png';
-          chipDataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
-          dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:url('${chipDataUrl}') center/cover;`;
-        } catch (e) {}
+        if (isPaired) {
+          dotStyle = `display:inline-block;width:12px;height:12px;border-radius:50%;flex-shrink:0;animation:ss-yin-yang 3s linear infinite;background:conic-gradient(#fff 0deg 180deg,#222 180deg 360deg);position:relative;`;
+          const lightPath = nodePath.join(picDir, 'pic', img.url);
+          try {
+            const buf = nodeFs.readFileSync(lightPath);
+            const ext = nodePath.extname(lightPath).toLowerCase();
+            const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml' };
+            const mime = mimeMap[ext] || 'image/png';
+            chipDataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
+          } catch (e) {}
+        } else {
+          const fullPath = nodePath.join(picDir, 'pic', img.url);
+          try {
+            const buf = nodeFs.readFileSync(fullPath);
+            const ext = nodePath.extname(fullPath).toLowerCase();
+            const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml' };
+            const mime = mimeMap[ext] || 'image/png';
+            chipDataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
+            dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:url('${chipDataUrl}') center/cover;`;
+          } catch (e) {
+            dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#6c9,#69c);`;
+          }
+        }
         const dot = chip.createEl('span');
         dot.style.cssText = dotStyle;
+        if (isPaired) {
+          const dotInner = dot.createEl('span');
+          dotInner.style.cssText = 'position:absolute;top:0;left:25%;width:50%;height:50%;border-radius:50%;background:#fff;';
+          const dotInner2 = dot.createEl('span');
+          dotInner2.style.cssText = 'position:absolute;bottom:0;right:25%;width:50%;height:50%;border-radius:50%;background:#222;';
+          const dotDot1 = dot.createEl('span');
+          dotDot1.style.cssText = 'position:absolute;top:12.5%;left:37.5%;width:25%;height:25%;border-radius:50%;background:#222;';
+          const dotDot2 = dot.createEl('span');
+          dotDot2.style.cssText = 'position:absolute;bottom:12.5%;right:37.5%;width:25%;height:25%;border-radius:50%;background:#fff;';
+        }
         const nameEl = chip.createEl('span', { text: img.label || img.url });
         nameEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
         chip.addEventListener('click', async () => {
@@ -2426,25 +2552,42 @@ class SwiftSwitchPlugin extends Plugin {
             menu.appendChild(item);
           };
           mkItem(t('eyeCare.imgRename'), async () => {
-            const newName = await this._promptGroupName(img.url, t('eyeCare.imgRenameTitle'));
-            if (newName && newName !== img.url) {
-              try {
+            const newName = await this._promptGroupName(img.paired ? img.label : img.url, t('eyeCare.imgRenameTitle'));
+            if (!newName) return;
+            try {
+              if (img.paired) {
+                const ext = nodePath.extname(img.url);
+                const oldLightPath = nodePath.join(picDir, 'pic', img.url);
+                const oldDarkPath = nodePath.join(picDir, 'pic', img.urlDark);
+                const newLightPath = nodePath.join(picDir, 'pic', newName + '-light' + ext);
+                const newDarkPath = nodePath.join(picDir, 'pic', newName + '-dark' + ext);
+                if (nodeFs.existsSync(oldLightPath)) nodeFs.renameSync(oldLightPath, newLightPath);
+                if (nodeFs.existsSync(oldDarkPath)) nodeFs.renameSync(oldDarkPath, newDarkPath);
+                img.url = newName + '-light' + ext;
+                img.urlDark = newName + '-dark' + ext;
+                img.label = newName;
+              } else {
                 const oldPath = nodePath.join(picDir, 'pic', img.url);
                 const newPath = nodePath.join(picDir, 'pic', newName);
                 if (nodeFs.existsSync(oldPath)) {
                   nodeFs.renameSync(oldPath, newPath);
                   img.url = newName;
                   img.label = newName;
-                  await this.saveSettings();
-                  this.applyEyeCareColor();
-                  renderEyeCare();
                 }
-              } catch (_e) { new Notice(t('eyeCare.imgRenameFailed')); }
-            }
+              }
+              await this.saveSettings();
+              this.applyEyeCareColor();
+              renderEyeCare();
+            } catch (_e) { new Notice(t('eyeCare.imgRenameFailed')); }
           });
           mkItem(t('eyeCare.imgRotate'), async () => {
             try {
-              await this._rotateImage(img.url);
+              if (img.paired) {
+                await this._rotateImage(img.url);
+                await this._rotateImage(img.urlDark);
+              } else {
+                await this._rotateImage(img.url);
+              }
               this.applyEyeCareColor();
               renderEyeCare();
               new Notice(t('eyeCare.imgRotated'));
@@ -2452,10 +2595,17 @@ class SwiftSwitchPlugin extends Plugin {
           });
           mkItem(t('eyeCare.imgDelete'), async () => {
             try {
-              const delPath = nodePath.join(picDir, 'pic', img.url);
-              if (nodeFs.existsSync(delPath)) nodeFs.unlinkSync(delPath);
+              if (img.paired) {
+                const lightPath = nodePath.join(picDir, 'pic', img.url);
+                const darkPath = nodePath.join(picDir, 'pic', img.urlDark);
+                if (nodeFs.existsSync(lightPath)) nodeFs.unlinkSync(lightPath);
+                if (nodeFs.existsSync(darkPath)) nodeFs.unlinkSync(darkPath);
+              } else {
+                const delPath = nodePath.join(picDir, 'pic', img.url);
+                if (nodeFs.existsSync(delPath)) nodeFs.unlinkSync(delPath);
+              }
               const imgs2 = this.settings.bgImages || [];
-              const delIdx = imgs2.findIndex(i => i.url === img.url);
+              const delIdx = imgs2.findIndex(i => i === img);
               if (delIdx >= 0) imgs2.splice(delIdx, 1);
               if (this.settings.eyeCareColor === `__img_${delIdx}`) {
                 this.settings.eyeCareColor = '';
@@ -2811,7 +2961,7 @@ class SwiftSwitchPlugin extends Plugin {
     if (!animStyle) {
       animStyle = document.createElement('style');
       animStyle.id = 'ss-popup-anim';
-      animStyle.textContent = `@keyframes ss-dot-breathe{0%,100%{opacity:0.6;transform:scale(1)}50%{opacity:1;transform:scale(1.15)}}@keyframes ss-dot-breathe478{0%{opacity:0.5;transform:scale(0.8)}21%{opacity:1;transform:scale(1.2)}58%{opacity:1;transform:scale(1.2)}100%{opacity:0.5;transform:scale(0.8)}}@keyframes ss-dot-breatheBox{0%{opacity:0.5;transform:scale(0.8)}25%{opacity:1;transform:scale(1.2)}50%{opacity:1;transform:scale(1.2)}75%{opacity:0.5;transform:scale(0.8)}100%{opacity:0.5;transform:scale(0.8)}}`;
+      animStyle.textContent = `@keyframes ss-dot-breathe{0%,100%{opacity:0.6;transform:scale(1)}50%{opacity:1;transform:scale(1.15)}}@keyframes ss-dot-breathe478{0%{opacity:0.5;transform:scale(0.8)}21%{opacity:1;transform:scale(1.2)}58%{opacity:1;transform:scale(1.2)}100%{opacity:0.5;transform:scale(0.8)}}@keyframes ss-dot-breatheBox{0%{opacity:0.5;transform:scale(0.8)}25%{opacity:1;transform:scale(1.2)}50%{opacity:1;transform:scale(1.2)}75%{opacity:0.5;transform:scale(0.8)}100%{opacity:0.5;transform:scale(0.8)}}@keyframes ss-yin-yang{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`;
       document.head.appendChild(animStyle);
     }
 
@@ -3119,17 +3269,23 @@ class SwiftSwitchPlugin extends Plugin {
 
       // 删除
       mkItem(t('context.delete'), async () => {
-        if (confirm(t('context.delete') + ' "' + snippetName + '"?')) {
           if (chipEnabled) {
             this._setSnippetEnabled(snippetName, false);
+          }
+          const presetMatch = snippetName.match(/^ss-(.+)$/);
+          if (presetMatch) {
+            if (!this.settings.deletedPresets) this.settings.deletedPresets = [];
+            if (!this.settings.deletedPresets.includes(presetMatch[1])) {
+              this.settings.deletedPresets.push(presetMatch[1]);
+            }
           }
           const snippetPath = '.obsidian/snippets/' + snippetName + '.css';
           const jsSnippetPath = '.obsidian/snippets/' + snippetName + '.js';
           let deleted = false;
           try { await this.app.vault.adapter.remove(snippetPath); deleted = true; } catch (_e) {}
           if (!deleted) { try { await this.app.vault.adapter.remove(jsSnippetPath); } catch (_e) {} }
+          await this.saveSettings();
           rerender();
-        }
       });
 
       // 移入分组（子菜单）
@@ -3173,9 +3329,16 @@ class SwiftSwitchPlugin extends Plugin {
       if (currentGroup) {
         if (currentGroup === '__bg__') {
           mkItem(t('context.delete'), async () => {
-            if (confirm(t('context.delete') + ' "' + snippetName + '"?')) {
+
               if (chipEnabled) {
                 this._setSnippetEnabled(snippetName, false);
+              }
+              const presetMatch = snippetName.match(/^ss-(.+)$/);
+              if (presetMatch) {
+                if (!this.settings.deletedPresets) this.settings.deletedPresets = [];
+                if (!this.settings.deletedPresets.includes(presetMatch[1])) {
+                  this.settings.deletedPresets.push(presetMatch[1]);
+                }
               }
               const snippetPath = '.obsidian/snippets/' + snippetName + '.css';
               const jsSnippetPath = '.obsidian/snippets/' + snippetName + '.js';
@@ -3189,7 +3352,7 @@ class SwiftSwitchPlugin extends Plugin {
               }
               await this.saveSettings();
               rerender();
-            }
+
           });
         } else {
           mkItem(t('context.removeFromGroup'), async () => {

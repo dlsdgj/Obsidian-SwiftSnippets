@@ -1,4 +1,13 @@
-## 🆕 v1.1.0 (2026-06-25)
+## 🆕 v1.1.1 (2026-06-25)
+
+- **Dark/Light Image Auto-Switch / 深浅模式图片自动切换** — Background images with `-light`/`-dark` suffix (e.g. `田-light.png` + `田-dark.png`) auto-switch when toggling dark/light mode / 带有 `-light`/`-dark` 后缀的背景图片（如 `田-light.png` + `田-dark.png`）在切换深浅模式时自动切换
+- **Paired Image Chips / 配对图片合并** — Paired light/dark images merge into a single chip with a rotating yin-yang icon and base name only / 配对的深浅图片合并为单个 chip，显示旋转太极图和基础名称
+- **Floating Button Wheel / 悬浮按钮滚轮** — Scroll wheel on floating button now cycles through both CSS snippets and background images / 悬浮按钮滚轮现在可切换 CSS 片段和背景图片
+- **Delete Preset Persistence / 删除预设持久化** — Deleted `ss-` preset snippets are remembered; no longer recreated on plugin reload / 删除的 `ss-` 预设片段会被记住，插件重启后不再重建
+- **No Delete Confirmation / 删除无需确认** — Removed confirm dialog when deleting snippet chips / 删除 snippet chip 时不再弹出确认窗口
+- **Default Panel Width / 默认面板宽度** — Management popup starts at 480px width instead of full viewport; still resizable via drag handle / 管理面板默认宽度 480px 而非全屏，仍可通过拖拽手柄调整
+
+## v1.1.0 (2026-06-25)
 
 - **Eye Care Presets as CSS Snippets / 护眼色预设导出为CSS片段** — Exported all 22 eye care presets (colors + patterns) to `.obsidian/snippets/ss-*.css` files with `.theme-dark`/`.theme-light` selectors for automatic dark/light mode adaptation / 将22个护眼色预设（纯色+图案）导出为 `.obsidian/snippets/ss-*.css` 文件，使用 `.theme-dark`/`.theme-light` 选择器自动适配深浅模式
 - **Background/Image Unified Group / 背景图片统一分组** — Merged background colors and image backgrounds into a single "Background/Image" group with mutual exclusion; drag snippets in from other groups / 将背景色和图片背景合并为统一的"背景/图片"分组，互斥切换；支持从其他分组拖入snippet
