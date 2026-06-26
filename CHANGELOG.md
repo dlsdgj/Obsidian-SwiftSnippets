@@ -1,4 +1,16 @@
-## 🆕 v1.1.1 (2026-06-25)
+## 🆕 v1.1.2 (2026-06-26)
+
+- **Hover Preview / 悬浮预览** — Hover on snippet/theme/font chips to instantly preview the effect; mouse leave restores previous state; click to apply / 悬浮 snippet/主题/字体 chip 即时预览效果，鼠标离开恢复原状，点击应用
+- **Font Management / 字体管理** — New "Font" section with system font chips, ⭐ favorites, and settings (color, opacity, line height, left/right margin); lazy-loaded on click / 新增"字体"区域，系统字体 chip、⭐收藏、颜色/透明度/行间距/左右边距设置，点击标题懒加载
+- **Font Enable/Disable / 字体开关** — Toggle button in font section header to quickly disable/enable all font customizations / 字体标题栏启用/禁用按钮，快速切换字体自定义
+- **Default Font Chip / 默认字体** — First chip in font list resets to system default font / 字体列表首个 chip 恢复系统默认字体
+- **Theme Hover Preview / 主题悬浮预览** — Hover theme chips to preview theme in real-time without applying / 悬浮主题 chip 实时预览主题效果
+- **Image Chip Preview / 图片 chip 预览** — Hover image background chips to preview the image effect on the editor / 悬浮图片背景 chip 预览图片效果
+- **Exclusive Group Preview / 互斥分组预览** — Hover preview on exclusive group chips temporarily disables other group members / 悬浮互斥分组 chip 预览时临时禁用同组其他成员
+- **Drag Refresh Fix / 拖拽刷新修复** — Dragging snippets out of Background/Image group now properly refreshes both areas / 从背景/图片分组拖出 snippet 时正确刷新两个区域
+- **Image Click Fix / 图片点击修复** — Clicking image chips now correctly applies instead of toggling off due to preview state / 修复图片 chip 因预览状态导致点击反而取消的问题
+
+## v1.1.1 (2026-06-25)
 
 - **Dark/Light Image Auto-Switch / 深浅模式图片自动切换** — Background images with `-light`/`-dark` suffix (e.g. `田-light.png` + `田-dark.png`) auto-switch when toggling dark/light mode / 带有 `-light`/`-dark` 后缀的背景图片（如 `田-light.png` + `田-dark.png`）在切换深浅模式时自动切换
 - **Paired Image Chips / 配对图片合并** — Paired light/dark images merge into a single chip with a rotating yin-yang icon and base name only / 配对的深浅图片合并为单个 chip，显示旋转太极图和基础名称

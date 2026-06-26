@@ -114,6 +114,21 @@ const i18n = {
     'group.exclusive.on': '已设为互斥分组',
     'group.exclusive.off': '已取消互斥分组',
     'group.exclusive.hint': '互斥分组中的 Snippet 不能同时开启',
+    'font.section': '字体',
+    'font.clickToLoad': '点击加载字体',
+    'font.loading': '加载中...',
+    'font.color': '颜色',
+    'font.opacity': '透明度',
+    'font.lineHeight': '行间距',
+    'font.marginL': '左边距',
+    'font.marginR': '右边距',
+    'font.reset': '重置',
+    'font.applied': '字体已应用',
+    'font.resetDone': '字体已重置',
+    'font.noFonts': '未找到系统字体',
+    'font.default': '默认字体',
+    'font.enabled': '启用',
+    'font.disabled': '禁用',
   },
   en: {
     'popup.title': 'SwiftSwitch',
@@ -223,6 +238,21 @@ const i18n = {
     'group.exclusive.on': 'Set as exclusive group',
     'group.exclusive.off': 'Exclusive group removed',
     'group.exclusive.hint': 'Snippets in exclusive group cannot be enabled simultaneously',
+    'font.section': 'Font',
+    'font.clickToLoad': 'Click to load fonts',
+    'font.loading': 'Loading...',
+    'font.color': 'Color',
+    'font.opacity': 'Opacity',
+    'font.lineHeight': 'Line Height',
+    'font.marginL': 'Margin Left',
+    'font.marginR': 'Margin Right',
+    'font.reset': 'Reset',
+    'font.applied': 'Font applied',
+    'font.resetDone': 'Font reset',
+    'font.noFonts': 'No system fonts found',
+    'font.default': 'Default',
+    'font.enabled': 'On',
+    'font.disabled': 'Off',
   }
 };
 
@@ -291,6 +321,10 @@ class SwiftSwitchPlugin extends Plugin {
     // 恢复护眼色
     if (this.settings.eyeCareColor) {
       this.applyEyeCareColor();
+    }
+
+    if (this.settings.activeFont) {
+      this.applyFontSettings();
     }
 
     // 页面风格记忆：监听活动 leaf 变化
@@ -366,6 +400,13 @@ class SwiftSwitchPlugin extends Plugin {
       pageStyles: {},       // { filePath: { theme, isDark, eyeCareColor, enabledSnippets } }
       exclusiveGroups: ['标题'], // 互斥分组名列表，同组 snippet 不能同时开启
       deletedPresets: [],        // 用户删除的预设 key，不再自动重建
+      fontFavorites: [],         // 收藏的字体名列表
+      activeFont: '',            // 当前应用的字体名
+      fontColor: '',             // 字体颜色（空=默认）
+      fontOpacity: 1,            // 字体透明度 0~1
+      fontLineHeight: 0,         // 行间距倍数 0=默认
+      fontMarginL: 0,            // 左边距 px 0=默认
+      fontMarginR: 0,            // 右边距 px 0=默认
     }, data);
   }
 
@@ -608,6 +649,111 @@ class SwiftSwitchPlugin extends Plugin {
     this._removeOverlay('ss-edge-glow-overlay');
     this._removeOverlay('ss-cursor-glow-overlay');
     this._stopCursorTracking();
+  }
+
+  async getSystemFonts() {
+    if (this._cachedFonts) return this._cachedFonts;
+    try {
+      const { execSync } = require('child_process');
+      let cmd;
+      if (process.platform === 'win32') {
+        cmd = 'chcp 65001 >nul & powershell -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [System.Reflection.Assembly]::LoadWithPartialName(\'System.Drawing\') | Out-Null; (New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }"';
+      } else if (process.platform === 'darwin') {
+        cmd = 'system_profiler SPFontsDataType 2>/dev/null | awk -F": " "/Full Name:/{print $2}" | sort -u';
+      } else {
+        cmd = 'fc-list --format="%{family}\\n" | sort -u';
+      }
+      const output = execSync(cmd, { encoding: 'utf-8', timeout: 15000 });
+      const fonts = [...new Set(output.split('\n').map(f => f.trim()).filter(f => f.length > 0))];
+      fonts.sort((a, b) => a.localeCompare(b, _currentLang === 'zh' ? 'zh-CN' : 'en'));
+      this._cachedFonts = fonts;
+      return fonts;
+    } catch (e) {
+      console.warn('[SwiftSnippets] Failed to get system fonts:', e);
+      return [];
+    }
+  }
+
+  applyFontSettings() {
+    let styleEl = document.getElementById('ss-font-style');
+    const s = this.settings;
+    if (this._fontDisabled || (!s.activeFont && !s.fontColor && s.fontOpacity >= 1 && !s.fontLineHeight && !s.fontMarginL && !s.fontMarginR)) {
+      if (styleEl) styleEl.remove();
+      return;
+    }
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'ss-font-style';
+      document.head.appendChild(styleEl);
+    }
+
+    const ff = s.activeFont || '';
+    const lh = s.fontLineHeight > 0 ? s.fontLineHeight : '';
+    const ml = s.fontMarginL || '';
+    const mr = s.fontMarginR || '';
+
+    let colorRule = '';
+    if (s.fontColor || s.fontOpacity < 1) {
+      if (s.fontColor && s.fontOpacity < 1) {
+        const r = parseInt(s.fontColor.slice(1,3), 16);
+        const g = parseInt(s.fontColor.slice(3,5), 16);
+        const b = parseInt(s.fontColor.slice(5,7), 16);
+        colorRule = `rgba(${r},${g},${b},${s.fontOpacity})`;
+      } else if (s.fontColor) {
+        colorRule = s.fontColor;
+      } else {
+        colorRule = `rgba(var(--text-normal-rgb, 200,200,200),${s.fontOpacity})`;
+      }
+    }
+
+    let css = '';
+    if (ff) {
+      css += `.workspace-leaf-content[data-type="markdown"] .markdown-preview-view,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-sizer,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view .markdown-rendered {
+  font-family: "${ff}", var(--font-text), sans-serif !important;${lh ? `\n  line-height: ${lh} !important;` : ''}${ml ? `\n  padding-left: ${ml}px !important;` : ''}${mr ? `\n  padding-right: ${mr}px !important;` : ''}
+}
+.workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-line,
+.workspace-leaf-content[data-type="markdown"] .cm-s-obsidian .cm-line {
+  font-family: "${ff}", var(--font-text), sans-serif !important;${lh ? `\n  line-height: ${lh} !important;` : ''}
+}`;
+    } else if (lh) {
+      css += `.workspace-leaf-content[data-type="markdown"] .markdown-preview-view,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-sizer,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view .markdown-rendered {
+  line-height: ${lh} !important;
+}
+.workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-line,
+.workspace-leaf-content[data-type="markdown"] .cm-s-obsidian .cm-line {
+  line-height: ${lh} !important;
+}`;
+    }
+
+    if (ml || mr) {
+      css += `
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view {${ml ? `\n  padding-left: ${ml}px !important;` : ''}${mr ? `\n  padding-right: ${mr}px !important;` : ''}
+}
+.workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-scroller,
+.workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-content {${ml ? `\n  padding-left: ${ml}px !important;` : ''}${mr ? `\n  padding-right: ${mr}px !important;` : ''}
+}`;
+    }
+
+    if (colorRule) {
+      css += `
+.workspace-leaf-content[data-type="markdown"] .cm-s-obsidian .cm-line,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view p,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view li,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view h1,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view h2,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view h3,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view h4,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view h5,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view h6 {
+  color: ${colorRule} !important;
+}`;
+    }
+
+    styleEl.textContent = css;
   }
 
   _resolveImageForMode(imgItem) {
@@ -1195,7 +1341,7 @@ class SwiftSwitchPlugin extends Plugin {
       e.preventDefault();
       if (e.ctrlKey || e.shiftKey) {
         // Ctrl/Shift+滚轮：切换主题
-        const { currentTheme, themeDirs } = await this.getThemeInfo();
+      let { currentTheme, themeDirs } = await this.getThemeInfo();
         if (themeDirs.length === 0) return;
         const list = [''].concat(themeDirs);
         const idx = list.indexOf(currentTheme);
@@ -2077,7 +2223,7 @@ class SwiftSwitchPlugin extends Plugin {
 
     const renderThemes = async () => {
       themeArea.empty();
-      const { currentTheme, themeDirs } = await this.getThemeInfo();
+      let { currentTheme, themeDirs } = await this.getThemeInfo();
 
       // 主题标签行 + 记忆模式 + 深浅模式开关
       const themeHeaderRow = themeArea.createDiv();
@@ -2241,10 +2387,17 @@ class SwiftSwitchPlugin extends Plugin {
       const themeChips = themeArea.createDiv();
       themeChips.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
 
+      const applyThemeChipStyle = (el, active) => {
+        el.style.borderColor = active ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+        el.style.background = active ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)';
+        el.style.color = active ? '#fff' : 'var(--text-muted)';
+      };
+
       // 默认主题 chip
       const defaultChip = themeChips.createEl('span');
       defaultChip.textContent = t('theme.default');
       const isDefaultActive = currentTheme === '';
+      let defaultPreviewing = false;
       defaultChip.style.cssText = `
         display:inline-block;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;
         user-select:none;transition:all 0.15s ease;
@@ -2252,17 +2405,31 @@ class SwiftSwitchPlugin extends Plugin {
         background:${isDefaultActive ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)'};
         color:${isDefaultActive ? '#fff' : 'var(--text-muted)'};
       `;
-      defaultChip.addEventListener('click', async () => {
+      defaultChip.addEventListener('mouseenter', async () => {
         if (currentTheme === '') return;
+        defaultPreviewing = true;
+        await this.switchTheme('', true);
+      });
+      defaultChip.addEventListener('mouseleave', async () => {
+        if (!defaultPreviewing) return;
+        defaultPreviewing = false;
+        await this.switchTheme(currentTheme, true);
+      });
+      defaultChip.addEventListener('click', async () => {
+        defaultPreviewing = false;
+        if (currentTheme === '') return;
+        currentTheme = '';
         await this.switchTheme('');
-        renderThemes();
+        applyThemeChipStyle(defaultChip, true);
+        themeChipEls.forEach(({ el, name }) => applyThemeChipStyle(el, false));
       });
 
-      // 已安装主题 chips
+      const themeChipEls = [];
       themeDirs.forEach(themeName => {
         const chip = themeChips.createEl('span');
         chip.textContent = themeName;
         const isActive = currentTheme === themeName;
+        let themePreviewing = false;
         chip.style.cssText = `
           display:inline-block;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;
           user-select:none;transition:all 0.15s ease;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -2271,10 +2438,24 @@ class SwiftSwitchPlugin extends Plugin {
           color:${isActive ? '#fff' : 'var(--text-muted)'};
         `;
         chip.title = themeName;
-        chip.addEventListener('click', async () => {
+        themeChipEls.push({ el: chip, name: themeName });
+        chip.addEventListener('mouseenter', async () => {
           if (currentTheme === themeName) return;
+          themePreviewing = true;
+          await this.switchTheme(themeName, true);
+        });
+        chip.addEventListener('mouseleave', async () => {
+          if (!themePreviewing) return;
+          themePreviewing = false;
+          await this.switchTheme(currentTheme, true);
+        });
+        chip.addEventListener('click', async () => {
+          themePreviewing = false;
+          if (currentTheme === themeName) return;
+          currentTheme = themeName;
           await this.switchTheme(themeName);
-          renderThemes();
+          applyThemeChipStyle(defaultChip, false);
+          themeChipEls.forEach(({ el, name }) => applyThemeChipStyle(el, name === themeName));
         });
       });
 
@@ -2475,6 +2656,8 @@ class SwiftSwitchPlugin extends Plugin {
       };
       const hidePreview = () => { previewEl.style.opacity = '0'; };
 
+      let prevEyeCareColor = null;
+
       imgs.forEach((img, idx) => {
         const isActive = this.settings.eyeCareColor === `__img_${idx}`;
         const chip = chipsContainer.createDiv();
@@ -2520,7 +2703,41 @@ class SwiftSwitchPlugin extends Plugin {
         }
         const nameEl = chip.createEl('span', { text: img.label || img.url });
         nameEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+
+        const applyChipStyle = (active) => {
+          chip.style.borderColor = active ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+          chip.style.background = active ? 'var(--interactive-accent)' : 'var(--background-primary)';
+          chip.style.color = active ? '#fff' : 'var(--text-normal)';
+        };
+
+        let imgPreviewing = false;
+        chip.addEventListener('mouseenter', () => {
+          if (isActive) { if (chipDataUrl) showPreview(chipDataUrl, chip); return; }
+          imgPreviewing = true;
+          prevEyeCareColor = this.settings.eyeCareColor;
+          this.settings.eyeCareColor = `__img_${idx}`;
+          for (const name of bgMembers) {
+            this._setSnippetEnabled(name, false);
+          }
+          this.applyEyeCareColor();
+          applyChipStyle(true);
+          if (chipDataUrl) showPreview(chipDataUrl, chip);
+        });
+        chip.addEventListener('mouseleave', () => {
+          hidePreview();
+          if (!imgPreviewing) return;
+          imgPreviewing = false;
+          this.settings.eyeCareColor = prevEyeCareColor;
+          this.applyEyeCareColor();
+          applyChipStyle(isActive);
+        });
+
         chip.addEventListener('click', async () => {
+          if (imgPreviewing) {
+            imgPreviewing = false;
+            this.settings.eyeCareColor = prevEyeCareColor;
+            this.applyEyeCareColor();
+          }
           if (this.settings.eyeCareColor === `__img_${idx}`) {
             this.settings.eyeCareColor = '';
           } else {
@@ -2534,8 +2751,6 @@ class SwiftSwitchPlugin extends Plugin {
           renderEyeCare();
           renderContent();
         });
-        chip.addEventListener('mouseenter', () => { if (chipDataUrl) showPreview(chipDataUrl, chip); });
-        chip.addEventListener('mouseleave', () => { hidePreview(); });
         chip.addEventListener('contextmenu', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -2764,10 +2979,11 @@ class SwiftSwitchPlugin extends Plugin {
           if (!this._dragData) return;
           const snippetName = this._dragData.snippetName;
           const sourceGroup = this._dragData.sourceGroup;
-          if (sourceGroup === gName) return; // 同组不操作
+          if (sourceGroup === gName) return;
           await this._moveToGroup(snippetName, gName);
           this._dragData = null;
           renderContent();
+          if (sourceGroup === '__bg__') renderEyeCare();
         });
 
         members.forEach(snippetName => {
@@ -2827,9 +3043,11 @@ class SwiftSwitchPlugin extends Plugin {
           e.preventDefault();
           chipsContainer.style.borderColor = 'transparent';
           if (!this._dragData) return;
+          const srcGroup = this._dragData.sourceGroup;
           await this._removeFromGroup(this._dragData.snippetName);
           this._dragData = null;
           renderContent();
+          if (srcGroup === '__bg__') renderEyeCare();
         });
 
         ungrouped.forEach(snippetName => {
@@ -2900,6 +3118,330 @@ class SwiftSwitchPlugin extends Plugin {
     });
 
     renderContent();
+
+    // ── 字体区域 ────────────────────────────────────────────────────────
+    const fontArea = popup.createDiv();
+    fontArea.style.cssText = 'margin-top:8px;';
+
+    const fontHeader = fontArea.createDiv();
+    fontHeader.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;user-select:none;';
+
+    const fontLabel = fontHeader.createEl('span', { text: t('font.section') });
+    fontLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);cursor:pointer;';
+
+    const fontHint = fontHeader.createEl('span', { text: t('font.clickToLoad') });
+    fontHint.style.cssText = 'font-size:10px;color:var(--text-muted);';
+
+    const fontToggle = fontHeader.createEl('span');
+    const isFontOn = !this._fontDisabled;
+    fontToggle.textContent = isFontOn ? t('font.enabled') : t('font.disabled');
+    fontToggle.style.cssText = `
+      font-size:10px;padding:1px 8px;border-radius:8px;cursor:pointer;
+      border:1px solid ${isFontOn ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
+      background:${isFontOn ? 'var(--interactive-accent)' : 'transparent'};
+      color:${isFontOn ? '#fff' : 'var(--text-muted)'};
+      margin-left:auto;user-select:none;transition:all 0.15s ease;
+    `;
+    fontToggle.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      this._fontDisabled = !this._fontDisabled;
+      const on = !this._fontDisabled;
+      fontToggle.textContent = on ? t('font.enabled') : t('font.disabled');
+      fontToggle.style.borderColor = on ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+      fontToggle.style.background = on ? 'var(--interactive-accent)' : 'transparent';
+      fontToggle.style.color = on ? '#fff' : 'var(--text-muted)';
+      this.applyFontSettings();
+      await this.saveSettings();
+    });
+
+    const fontChipsContainer = fontArea.createDiv();
+    fontChipsContainer.style.cssText = 'display:none;flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;padding:4px;';
+
+    const fontSettingsPanel = fontArea.createDiv();
+    fontSettingsPanel.style.cssText = 'display:none;margin-top:6px;padding:8px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.3);';
+
+    let fontsLoaded = false;
+
+    const applyFontChipStyle = (chip, star, active) => {
+      chip.style.borderColor = active ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+      chip.style.background = active ? 'var(--interactive-accent)' : 'var(--background-primary)';
+      chip.style.color = active ? '#fff' : 'var(--text-normal)';
+      star.style.borderColor = active ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+      star.style.background = active ? 'var(--interactive-accent)' : 'var(--background-primary)';
+    };
+
+    const renderFontChips = (fonts) => {
+      fontChipsContainer.innerHTML = '';
+      const favorites = this.settings.fontFavorites || [];
+
+      const defaultChipWrap = fontChipsContainer.createDiv();
+      defaultChipWrap.style.cssText = 'display:inline-flex;align-items:center;gap:0;';
+      const isDefaultActive = !this.settings.activeFont;
+      const defaultChip = defaultChipWrap.createEl('span');
+      defaultChip.textContent = t('font.default');
+      defaultChip.style.cssText = `
+        display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;
+        user-select:none;transition:all 0.15s ease;
+        border:1px solid ${isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
+        background:${isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-primary)'};
+        color:${isDefaultActive ? '#fff' : 'var(--text-normal)'};
+      `;
+      const defaultStar = defaultChipWrap.createEl('span');
+      defaultStar.style.cssText = 'display:none;';
+
+      let defaultPreviewing = false;
+      defaultChip.addEventListener('mouseenter', () => {
+        if (isDefaultActive) return;
+        defaultPreviewing = true;
+        defaultChip._prevFont = this.settings.activeFont;
+        this.settings.activeFont = '';
+        this.applyFontSettings();
+        defaultChip.style.borderColor = 'var(--interactive-accent)';
+        defaultChip.style.background = 'var(--interactive-accent)';
+        defaultChip.style.color = '#fff';
+      });
+      defaultChip.addEventListener('mouseleave', () => {
+        if (!defaultPreviewing) return;
+        defaultPreviewing = false;
+        this.settings.activeFont = defaultChip._prevFont;
+        this.applyFontSettings();
+        defaultChip.style.borderColor = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+        defaultChip.style.background = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-primary)';
+        defaultChip.style.color = isDefaultActive ? '#fff' : 'var(--text-normal)';
+      });
+      defaultChip.addEventListener('click', async () => {
+        if (defaultPreviewing) {
+          defaultPreviewing = false;
+          this.settings.activeFont = defaultChip._prevFont;
+          this.applyFontSettings();
+        }
+        this.settings.activeFont = '';
+        this.applyFontSettings();
+        await this.saveSettings();
+        renderFontChips(fonts);
+        renderFontSettings();
+      });
+
+      const sorted = [...fonts].sort((a, b) => {
+        const aFav = favorites.includes(a) ? 0 : 1;
+        const bFav = favorites.includes(b) ? 0 : 1;
+        return aFav - bFav || a.localeCompare(b);
+      });
+
+      sorted.forEach(fontName => {
+        const isFav = favorites.includes(fontName);
+        const isActive = this.settings.activeFont === fontName;
+
+        const chipWrap = fontChipsContainer.createDiv();
+        chipWrap.style.cssText = 'display:inline-flex;align-items:center;gap:0;';
+
+        const chip = chipWrap.createEl('span');
+        chip.textContent = fontName;
+        chip.style.cssText = `
+          display:inline-block;padding:2px 4px 2px 8px;border-radius:12px 0 0 12px;font-size:11px;cursor:pointer;
+          user-select:none;transition:all 0.15s ease;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+          border:1px solid ${isActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
+          border-right:none;
+          background:${isActive ? 'var(--interactive-accent)' : 'var(--background-primary)'};
+          color:${isActive ? '#fff' : 'var(--text-normal)'};
+          font-family:"${fontName}";
+        `;
+
+        const star = chipWrap.createEl('span');
+        star.textContent = isFav ? '★' : '☆';
+        star.style.cssText = `
+          display:inline-flex;align-items:center;justify-content:center;
+          padding:2px 6px;border-radius:0 12px 12px 0;font-size:11px;cursor:pointer;
+          user-select:none;transition:all 0.15s ease;
+          border:1px solid ${isActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
+          border-left:none;
+          background:${isActive ? 'var(--interactive-accent)' : 'var(--background-primary)'};
+          color:${isFav ? '#f5a623' : 'var(--text-muted)'};
+        `;
+
+        let fontPreviewing = false;
+        chip.addEventListener('mouseenter', () => {
+          if (isActive) return;
+          fontPreviewing = true;
+          chip._prevFont = this.settings.activeFont;
+          this.settings.activeFont = fontName;
+          this.applyFontSettings();
+          chip.style.borderColor = 'var(--interactive-accent)';
+          chip.style.background = 'var(--interactive-accent)';
+          chip.style.color = '#fff';
+          star.style.borderColor = 'var(--interactive-accent)';
+          star.style.background = 'var(--interactive-accent)';
+        });
+        chip.addEventListener('mouseleave', () => {
+          if (!fontPreviewing) return;
+          fontPreviewing = false;
+          this.settings.activeFont = chip._prevFont;
+          this.applyFontSettings();
+          applyFontChipStyle(chip, star, isActive);
+          star.style.color = isFav ? '#f5a623' : 'var(--text-muted)';
+        });
+
+        chip.addEventListener('click', async () => {
+          if (fontPreviewing) {
+            fontPreviewing = false;
+            this.settings.activeFont = chip._prevFont;
+            this.applyFontSettings();
+          }
+          if (this.settings.activeFont === fontName) {
+            this.settings.activeFont = '';
+          } else {
+            this.settings.activeFont = fontName;
+          }
+          this.applyFontSettings();
+          await this.saveSettings();
+          renderFontChips(fonts);
+          renderFontSettings();
+        });
+
+        star.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!this.settings.fontFavorites) this.settings.fontFavorites = [];
+          const idx = this.settings.fontFavorites.indexOf(fontName);
+          if (idx >= 0) {
+            this.settings.fontFavorites.splice(idx, 1);
+          } else {
+            this.settings.fontFavorites.push(fontName);
+          }
+          await this.saveSettings();
+          renderFontChips(fonts);
+        });
+      });
+    };
+
+    const renderFontSettings = () => {
+      fontSettingsPanel.innerHTML = '';
+      if (!this.settings.activeFont && !this.settings.fontColor && this.settings.fontOpacity >= 1 && !this.settings.fontLineHeight && !this.settings.fontMarginL && !this.settings.fontMarginR) {
+        fontSettingsPanel.style.display = 'none';
+        return;
+      }
+      fontSettingsPanel.style.display = 'block';
+
+      const row1 = fontSettingsPanel.createDiv();
+      row1.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+
+      const mkLabel = (text) => {
+        const el = document.createElement('span');
+        el.textContent = text;
+        el.style.cssText = 'font-size:10px;color:var(--text-muted);white-space:nowrap;';
+        return el;
+      };
+
+      row1.appendChild(mkLabel(t('font.color')));
+      const colorInput = row1.createEl('input', { type: 'color' });
+      colorInput.value = this.settings.fontColor || '#ffffff';
+      colorInput.style.cssText = 'width:28px;height:22px;padding:0;cursor:pointer;';
+      colorInput.addEventListener('input', async () => {
+        this.settings.fontColor = colorInput.value;
+        this.applyFontSettings();
+        await this.saveSettings();
+      });
+
+      row1.appendChild(mkLabel(t('font.opacity')));
+      const opSlider = row1.createEl('input', { type: 'range' });
+      opSlider.min = '10'; opSlider.max = '100'; opSlider.value = String(Math.round((this.settings.fontOpacity ?? 1) * 100));
+      opSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
+      const opVal = row1.createEl('span', { text: Math.round((this.settings.fontOpacity ?? 1) * 100) + '%' });
+      opVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
+      opSlider.addEventListener('input', async () => {
+        const v = parseInt(opSlider.value) / 100;
+        opVal.textContent = opSlider.value + '%';
+        this.settings.fontOpacity = v;
+        this.applyFontSettings();
+        await this.saveSettings();
+      });
+
+      row1.appendChild(mkLabel(t('font.lineHeight')));
+      const lhSlider = row1.createEl('input', { type: 'range' });
+      lhSlider.min = '10'; lhSlider.max = '30'; lhSlider.step = '1'; lhSlider.value = String(Math.round((this.settings.fontLineHeight ?? 1.5) * 10));
+      lhSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
+      const lhVal = row1.createEl('span', { text: (this.settings.fontLineHeight ?? 0) > 0 ? (this.settings.fontLineHeight).toFixed(1) : '-' });
+      lhVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:22px;';
+      lhSlider.addEventListener('input', async () => {
+        const v = parseInt(lhSlider.value) / 10;
+        lhVal.textContent = v.toFixed(1);
+        this.settings.fontLineHeight = v;
+        this.applyFontSettings();
+        await this.saveSettings();
+      });
+
+      const row2 = fontSettingsPanel.createDiv();
+      row2.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;';
+
+      row2.appendChild(mkLabel(t('font.marginL')));
+      const mlSlider = row2.createEl('input', { type: 'range' });
+      mlSlider.min = '0'; mlSlider.max = '80'; mlSlider.value = String(this.settings.fontMarginL ?? 0);
+      mlSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
+      const mlVal = row2.createEl('span', { text: (this.settings.fontMarginL ?? 0) + 'px' });
+      mlVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
+      mlSlider.addEventListener('input', async () => {
+        const v = parseInt(mlSlider.value);
+        mlVal.textContent = v + 'px';
+        this.settings.fontMarginL = v;
+        this.applyFontSettings();
+        await this.saveSettings();
+      });
+
+      row2.appendChild(mkLabel(t('font.marginR')));
+      const mrSlider = row2.createEl('input', { type: 'range' });
+      mrSlider.min = '0'; mrSlider.max = '80'; mrSlider.value = String(this.settings.fontMarginR ?? 0);
+      mrSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
+      const mrVal = row2.createEl('span', { text: (this.settings.fontMarginR ?? 0) + 'px' });
+      mrVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
+      mrSlider.addEventListener('input', async () => {
+        const v = parseInt(mrSlider.value);
+        mrVal.textContent = v + 'px';
+        this.settings.fontMarginR = v;
+        this.applyFontSettings();
+        await this.saveSettings();
+      });
+
+      const resetBtn = row2.createEl('span');
+      resetBtn.textContent = t('font.reset');
+      resetBtn.style.cssText = `
+        font-size:10px;padding:1px 8px;border-radius:8px;cursor:pointer;
+        border:1px solid var(--background-modifier-border);color:var(--text-muted);
+        user-select:none;margin-left:auto;
+      `;
+      resetBtn.addEventListener('click', async () => {
+        this.settings.activeFont = '';
+        this.settings.fontColor = '';
+        this.settings.fontOpacity = 1;
+        this.settings.fontLineHeight = 0;
+        this.settings.fontMarginL = 0;
+        this.settings.fontMarginR = 0;
+        this.applyFontSettings();
+        await this.saveSettings();
+        renderFontChips(fontsLoaded);
+        renderFontSettings();
+        new Notice(t('font.resetDone'));
+      });
+    };
+
+    fontLabel.addEventListener('click', async () => {
+      if (fontsLoaded) {
+        const visible = fontChipsContainer.style.display !== 'none';
+        fontChipsContainer.style.display = visible ? 'none' : 'flex';
+        fontSettingsPanel.style.display = (!visible && (this.settings.activeFont || this.settings.fontColor || this.settings.fontLineHeight || this.settings.fontMarginL || this.settings.fontMarginR)) ? 'block' : 'none';
+        fontHint.textContent = visible ? t('font.clickToLoad') : '';
+        return;
+      }
+      fontHint.textContent = t('font.loading');
+      const fonts = await this.getSystemFonts();
+      fontsLoaded = fonts;
+      if (fonts.length === 0) {
+        fontHint.textContent = t('font.noFonts');
+        return;
+      }
+      fontHint.textContent = '';
+      fontChipsContainer.style.display = 'flex';
+      renderFontChips(fonts);
+      renderFontSettings();
+    });
 
     // ── 底部：其他插件链接 ────────────────────────────────────────────
     const footer = popup.createDiv();
@@ -3161,8 +3703,44 @@ class SwiftSwitchPlugin extends Plugin {
     applyStyle(isEnabled);
 
     let chipEnabled = isEnabled;
+    let isPreviewing = false;
+    let previewDisabledMembers = [];
+
+    chip.addEventListener('mouseenter', () => {
+      if (chipEnabled) return;
+      isPreviewing = true;
+      if (isExclusive) {
+        const members = this.settings.groups[currentGroup] || [];
+        previewDisabledMembers = [];
+        for (const name of members) {
+          if (name !== snippetName) {
+            const cc = this.app.customCss;
+            const wasEnabled = cc && cc.enabledSnippets && cc.enabledSnippets.has(name);
+            if (wasEnabled) {
+              this._setSnippetEnabled(name, false);
+              previewDisabledMembers.push(name);
+            }
+          }
+        }
+      }
+      this._setSnippetEnabled(snippetName, true);
+      applyStyle(true);
+    });
+
+    chip.addEventListener('mouseleave', () => {
+      if (!isPreviewing) return;
+      isPreviewing = false;
+      this._setSnippetEnabled(snippetName, false);
+      for (const name of previewDisabledMembers) {
+        this._setSnippetEnabled(name, true);
+      }
+      previewDisabledMembers = [];
+      applyStyle(chipEnabled);
+    });
+
     chip.addEventListener('click', async (e) => {
       e.stopPropagation();
+      isPreviewing = false;
 
       if (!chipEnabled && isExclusive) {
         const members = this.settings.groups[currentGroup] || [];

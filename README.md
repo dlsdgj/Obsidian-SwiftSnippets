@@ -50,6 +50,18 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 <details>
 <summary>Changelog</summary>
 
+### v1.1.2 (2026-06-26)
+
+- **Hover Preview** — Hover on snippet/theme/font chips to instantly preview the effect; mouse leave restores previous state; click to apply
+- **Font Management** — New "Font" section with system font chips, ⭐ favorites, and settings (color, opacity, line height, left/right margin); lazy-loaded on click
+- **Font Enable/Disable** — Toggle button in font section header to quickly disable/enable all font customizations
+- **Default Font Chip** — First chip in font list resets to system default font
+- **Theme Hover Preview** — Hover theme chips to preview theme in real-time without applying
+- **Image Chip Preview** — Hover image background chips to preview the image effect on the editor
+- **Exclusive Group Preview** — Hover preview on exclusive group chips temporarily disables other group members
+- **Drag Refresh Fix** — Dragging snippets out of Background/Image group now properly refreshes both areas
+- **Image Click Fix** — Clicking image chips now correctly applies instead of toggling off due to preview state
+
 ### v1.1.1 (2026-06-25)
 
 - **Dark/Light Image Auto-Switch** — Background images with `-light`/`-dark` suffix (e.g. `田-light.png` + `田-dark.png`) auto-switch when toggling dark/light mode
