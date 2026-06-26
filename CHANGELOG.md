@@ -1,4 +1,15 @@
-## 🆕 v1.1.2 (2026-06-26)
+## 🆕 v1.1.3 (2026-06-26)
+
+- **Font Memory / 字体记忆** — Style memory mode now also remembers font settings (active font, enable/disable, color, opacity, line height, margins) / 记忆模式现在同时记忆字体设置（活动字体、启用/禁用、颜色、透明度、行间距、边距）
+- **Font Toggle Reversed / 字体按钮逆转** — Font enable/disable button now shows the opposite action: "Disable" when enabled, "Enable" when disabled / 字体启用/禁用按钮显示相反操作：启用时显示"禁用"，禁用时显示"启用"
+- **Font Section Collapse / 字体区域折叠** — Added ▶/▼ collapse toggle before font section header; collapse state is persisted / 字体标题前添加▶/▼折叠按钮，折叠状态持久化
+- **Font Collapse on Close / 关闭时折叠** — If font section is expanded when closing the management popup, it starts collapsed on next open / 关闭面板时字体区域为展开状态，下次打开时设为折叠
+- **Font Applied to Side Panels / 字体应用到侧面板** — Font settings now also apply to side panels (file explorer, search, outline, tags, backlinks) / 字体设置同时应用到左右侧面板（文件树、搜索、大纲、标签、反向链接）
+- **Image Stretch Mode / 图片拉伸模式** — Added "Stretch" chip option for background images (100%×100% fill), mutually exclusive with "Tile" / 背景图片添加"拉伸"chip选项（100%×100%填充），与"平铺"互斥
+- **Status Bar Font Button / 状态栏字体按钮** — New "f" chip in font section header adds a font button to the status bar; scroll wheel cycles through favorite fonts; hover to open standalone font manager panel / 字体标题后添加"f" chip，点击创建状态栏字体按钮；滚轮切换收藏字体；悬浮打开独立字体管理面板
+- **Standalone Font Manager / 独立字体管理面板** — Hovering the status bar font button opens a font management panel in the bottom-right corner; mouse-leave auto-closes; dragging the panel pins it (no auto-close) / 悬浮状态栏字体按钮打开右下角字体管理面板；鼠标离开自动关闭；拖动面板后固定（不自动关闭）
+
+## v1.1.2 (2026-06-26)
 
 - **Hover Preview / 悬浮预览** — Hover on snippet/theme/font chips to instantly preview the effect; mouse leave restores previous state; click to apply / 悬浮 snippet/主题/字体 chip 即时预览效果，鼠标离开恢复原状，点击应用
 - **Font Management / 字体管理** — New "Font" section with system font chips, ⭐ favorites, and settings (color, opacity, line height, left/right margin); lazy-loaded on click / 新增"字体"区域，系统字体 chip、⭐收藏、颜色/透明度/行间距/左右边距设置，点击标题懒加载

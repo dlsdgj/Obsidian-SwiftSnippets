@@ -4,8 +4,6 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
 ![Demo](assets/demo.gif)
 
-![Demo 2](assets/demo2.png)
-
 ## Features
 
 - **Status Bar Button** — Click the SwiftSwitch button in the status bar to open the management popup
@@ -51,6 +49,17 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
 <details>
 <summary>Changelog</summary>
+
+### v1.1.3 (2026-06-26)
+
+- **Font Memory** — Style memory mode now also remembers font settings (active font, enable/disable, color, opacity, line height, margins)
+- **Font Toggle Reversed** — Font enable/disable button now shows the opposite action: "Disable" when enabled, "Enable" when disabled
+- **Font Section Collapse** — Added ▶/▼ collapse toggle before font section header; collapse state is persisted
+- **Font Collapse on Close** — If font section is expanded when closing the management popup, it starts collapsed on next open
+- **Font Applied to Side Panels** — Font settings now also apply to side panels (file explorer, search, outline, tags, backlinks)
+- **Image Stretch Mode** — Added "Stretch" chip option for background images (100%×100% fill), mutually exclusive with "Tile"
+- **Status Bar Font Button** — New "f" chip in font section header adds a font button to the status bar; scroll wheel cycles through favorite fonts; hover to open standalone font manager panel
+- **Standalone Font Manager** — Hovering the status bar font button opens a font management panel in the bottom-right corner; mouse-leave auto-closes; dragging the panel pins it (no auto-close)
 
 ### v1.1.2 (2026-06-26)
 

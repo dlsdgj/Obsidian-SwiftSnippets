@@ -91,6 +91,7 @@ const i18n = {
     'eyeCare.imgRemove': '移除',
     'eyeCare.imgOpacity': '透明度',
     'eyeCare.imgTile': '平铺',
+    'eyeCare.imgStretch': '拉伸',
     'eyeCare.imgTitle': '图片',
     'eyeCare.imgHelp': '将图片文件放入 .obsidian\\plugins\\SwiftSnippets\\pic\\',
     'eyeCare.imgOpenFolder': '点击打开文件夹',
@@ -129,6 +130,14 @@ const i18n = {
     'font.default': '默认字体',
     'font.enabled': '启用',
     'font.disabled': '禁用',
+    'font.barChip': 'f',
+    'font.barTitle': '字体管理',
+    'font.barEdit': '编辑',
+    'font.barEditTitle': '编辑字体按钮',
+    'font.barEditText': '按钮文字',
+    'font.barEditStyle': '按钮样式 (CSS)',
+    'font.barDefaultText': 'f',
+    'font.noFavorites': '暂无收藏字体',
   },
   en: {
     'popup.title': 'SwiftSwitch',
@@ -215,6 +224,7 @@ const i18n = {
     'eyeCare.imgRemove': 'Remove',
     'eyeCare.imgOpacity': 'Opacity',
     'eyeCare.imgTile': 'Tile',
+    'eyeCare.imgStretch': 'Stretch',
     'eyeCare.imgTitle': 'Image',
     'eyeCare.imgHelp': 'Put image files into .obsidian\\plugins\\SwiftSnippets\\pic\\',
     'eyeCare.imgOpenFolder': 'Click to open folder',
@@ -253,6 +263,14 @@ const i18n = {
     'font.default': 'Default',
     'font.enabled': 'On',
     'font.disabled': 'Off',
+    'font.barChip': 'f',
+    'font.barTitle': 'Font Manager',
+    'font.barEdit': 'Edit',
+    'font.barEditTitle': 'Edit Font Button',
+    'font.barEditText': 'Button Text',
+    'font.barEditStyle': 'Button Style (CSS)',
+    'font.barDefaultText': 'f',
+    'font.noFavorites': 'No favorite fonts',
   }
 };
 
@@ -327,6 +345,10 @@ class SwiftSwitchPlugin extends Plugin {
       this.applyFontSettings();
     }
 
+    if (this.settings.fontBarButton) {
+      this._createFontBarButton();
+    }
+
     // 页面风格记忆：监听活动 leaf 变化
     this._lastFilePath = this._getActiveFilePath();
     this.registerEvent(this.app.workspace.on('active-leaf-change', async (leaf) => {
@@ -381,6 +403,7 @@ class SwiftSwitchPlugin extends Plugin {
     this._removeOverlay('ss-edge-glow-overlay');
     this._removeOverlay('ss-cursor-glow-overlay');
     this._stopCursorTracking();
+    this._removeFontBarButton();
   }
 
   async loadSettings() {
@@ -407,6 +430,8 @@ class SwiftSwitchPlugin extends Plugin {
       fontLineHeight: 0,         // 行间距倍数 0=默认
       fontMarginL: 0,            // 左边距 px 0=默认
       fontMarginR: 0,            // 右边距 px 0=默认
+      fontCollapsed: false,      // 字体区域是否折叠
+      fontBarButton: null,       // { text, css } or null — 状态栏字体按钮
     }, data);
   }
 
@@ -551,10 +576,20 @@ class SwiftSwitchPlugin extends Plugin {
       const isDark = document.body.classList.contains('theme-dark');
       const opacity = imgItem.opacity ?? 0.3;
       const tile = imgItem.tile ?? false;
+      const stretch = imgItem.stretch ?? false;
       const bg = isDark ? 'rgba(20,20,20,1)' : 'rgba(255,255,255,1)';
       const bgSec = isDark ? 'rgba(28,28,28,1)' : 'rgba(248,248,248,1)';
-      const bgSize = tile ? 'auto' : 'cover';
-      const bgRepeat = tile ? 'repeat' : 'no-repeat';
+      let bgSize, bgRepeat;
+      if (stretch) {
+        bgSize = '100% 100%';
+        bgRepeat = 'no-repeat';
+      } else if (tile) {
+        bgSize = 'auto';
+        bgRepeat = 'repeat';
+      } else {
+        bgSize = 'cover';
+        bgRepeat = 'no-repeat';
+      }
       styleEl.textContent = `
         .workspace-leaf-content,
         .markdown-source-view,
@@ -716,6 +751,18 @@ class SwiftSwitchPlugin extends Plugin {
 .workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-line,
 .workspace-leaf-content[data-type="markdown"] .cm-s-obsidian .cm-line {
   font-family: "${ff}", var(--font-text), sans-serif !important;${lh ? `\n  line-height: ${lh} !important;` : ''}
+}
+.workspace-split .workspace-leaf-content .nav-files-container,
+.workspace-split .workspace-leaf-content .search-result-file-title,
+.workspace-split .workspace-leaf-content .search-result-file-match,
+.workspace-split .workspace-leaf-content .tree-item-inner,
+.workspace-split .workspace-leaf-content .nav-file-title,
+.workspace-split .workspace-leaf-content .nav-folder-title,
+.workspace-split .workspace-leaf-content .outline .tree-item-inner,
+.workspace-split .workspace-leaf-content .tag-container .tree-item-inner,
+.workspace-split .workspace-leaf-content .backlink-pane .tree-item-inner,
+.workspace-split .workspace-leaf-content .workspace-leaf-content {
+  font-family: "${ff}", var(--font-text), sans-serif !important;
 }`;
     } else if (lh) {
       css += `.workspace-leaf-content[data-type="markdown"] .markdown-preview-view,
@@ -982,7 +1029,7 @@ class SwiftSwitchPlugin extends Plugin {
       console.log('[SwiftSnippets] picDir:', picDir, 'files:', files.length);
       const existingMap = {};
       (this.settings.bgImages || []).forEach(img => {
-        existingMap[img.label] = { opacity: img.opacity ?? 0.3, tile: img.tile ?? false };
+        existingMap[img.label] = { opacity: img.opacity ?? 0.3, tile: img.tile ?? false, stretch: img.stretch ?? false };
       });
       const fileSet = new Set(files);
       const paired = new Set();
@@ -1004,6 +1051,7 @@ class SwiftSwitchPlugin extends Plugin {
               label: label,
               opacity: existingMap[label]?.opacity ?? 0.3,
               tile: existingMap[label]?.tile ?? false,
+              stretch: existingMap[label]?.stretch ?? false,
               paired: true,
             });
           }
@@ -1029,6 +1077,7 @@ class SwiftSwitchPlugin extends Plugin {
                 label: label,
                 opacity: existingMap[label]?.opacity ?? 0.3,
                 tile: existingMap[label]?.tile ?? false,
+                stretch: existingMap[label]?.stretch ?? false,
                 paired: true,
               });
             }
@@ -1043,6 +1092,7 @@ class SwiftSwitchPlugin extends Plugin {
           label: f,
           opacity: existingMap[f]?.opacity ?? 0.3,
           tile: existingMap[f]?.tile ?? false,
+          stretch: existingMap[f]?.stretch ?? false,
         });
       }
       this.settings.bgImages = result;
@@ -1970,6 +2020,13 @@ class SwiftSwitchPlugin extends Plugin {
       isDark,
       eyeCareColor: this.settings.eyeCareColor || '',
       enabledSnippets: [...enabledSnippets],
+      activeFont: this.settings.activeFont || '',
+      fontDisabled: this._fontDisabled || false,
+      fontColor: this.settings.fontColor || '',
+      fontOpacity: this.settings.fontOpacity ?? 1,
+      fontLineHeight: this.settings.fontLineHeight ?? 0,
+      fontMarginL: this.settings.fontMarginL ?? 0,
+      fontMarginR: this.settings.fontMarginR ?? 0,
     };
   }
 
@@ -2011,6 +2068,29 @@ class SwiftSwitchPlugin extends Plugin {
           this._setSnippetEnabled(name, shouldBeEnabled);
         }
       }
+      if (profile.activeFont !== undefined) {
+        this.settings.activeFont = profile.activeFont;
+      }
+      if (profile.fontDisabled !== undefined) {
+        this._fontDisabled = profile.fontDisabled;
+      }
+      if (profile.fontColor !== undefined) {
+        this.settings.fontColor = profile.fontColor;
+      }
+      if (profile.fontOpacity !== undefined) {
+        this.settings.fontOpacity = profile.fontOpacity;
+      }
+      if (profile.fontLineHeight !== undefined) {
+        this.settings.fontLineHeight = profile.fontLineHeight;
+      }
+      if (profile.fontMarginL !== undefined) {
+        this.settings.fontMarginL = profile.fontMarginL;
+      }
+      if (profile.fontMarginR !== undefined) {
+        this.settings.fontMarginR = profile.fontMarginR;
+      }
+      this.applyFontSettings();
+      await this.saveSettings();
     } catch (_e) {
     }
   }
@@ -2107,6 +2187,10 @@ class SwiftSwitchPlugin extends Plugin {
         const higherZ = document.querySelector('[style*="z-index:1000"], [style*="z-index: 1000"]');
         if (higherZ && !popup.contains(higherZ)) return;
         this.settings.popupPosition = { left: popup.style.left, top: popup.style.top };
+        const fontChips = popup.querySelector('[data-ss-font-chips]');
+        if (fontChips && fontChips.style.display !== 'none') {
+          this.settings.fontCollapsed = true;
+        }
         this.saveSettings();
         popup.remove(); overlay.remove(); resizeHandle.remove();
         const pv1 = document.getElementById('ss-img-preview'); if (pv1) pv1.remove();
@@ -2163,6 +2247,10 @@ class SwiftSwitchPlugin extends Plugin {
       await this.saveSettings();
       const prevLeft = popup.style.left;
       const prevTop = popup.style.top;
+      const fontChipsLang = popup.querySelector('[data-ss-font-chips]');
+      if (fontChipsLang && fontChipsLang.style.display !== 'none') {
+        this.settings.fontCollapsed = true;
+      }
       popup.remove(); overlay.remove(); resizeHandle.remove();
       const pv2 = document.getElementById('ss-img-preview'); if (pv2) pv2.remove();
       this.openSnippetsPopup(prevLeft, prevTop);
@@ -2189,6 +2277,10 @@ class SwiftSwitchPlugin extends Plugin {
     closeBtn.style.cssText = 'cursor:pointer;font-size:16px;color:var(--text-muted);padding:2px 6px;';
     closeBtn.addEventListener('click', () => {
       this.settings.popupPosition = { left: popup.style.left, top: popup.style.top };
+      const fontChips2 = popup.querySelector('[data-ss-font-chips]');
+      if (fontChips2 && fontChips2.style.display !== 'none') {
+        this.settings.fontCollapsed = true;
+      }
       this.saveSettings();
       popup.remove(); overlay.remove(); resizeHandle.remove();
       const pv3 = document.getElementById('ss-img-preview'); if (pv3) pv3.remove();
@@ -2599,6 +2691,18 @@ class SwiftSwitchPlugin extends Plugin {
         tileBtn.textContent = t('eyeCare.imgTile');
         tileBtn.addEventListener('click', async () => {
           activeImg.tile = !(activeImg.tile ?? false);
+          if (activeImg.tile) activeImg.stretch = false;
+          await this.saveSettings();
+          this.applyEyeCareColor();
+          renderEyeCare();
+        });
+        const stretchBtn = headerRow.createEl('span');
+        const isStretch = activeImg.stretch ?? false;
+        stretchBtn.style.cssText = `font-size:10px;padding:1px 6px;border-radius:8px;cursor:pointer;border:1px solid ${isStretch ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};background:${isStretch ? 'var(--interactive-accent)' : 'var(--background-primary)'};color:${isStretch ? '#fff' : 'var(--text-muted)'};user-select:none;`;
+        stretchBtn.textContent = t('eyeCare.imgStretch');
+        stretchBtn.addEventListener('click', async () => {
+          activeImg.stretch = !(activeImg.stretch ?? false);
+          if (activeImg.stretch) activeImg.tile = false;
           await this.saveSettings();
           this.applyEyeCareColor();
           renderEyeCare();
@@ -3126,15 +3230,62 @@ class SwiftSwitchPlugin extends Plugin {
     const fontHeader = fontArea.createDiv();
     fontHeader.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;user-select:none;';
 
+    const fontCollapseIcon = fontHeader.createEl('span');
+    const isFontCollapsed = this.settings.fontCollapsed ?? true;
+    fontCollapseIcon.textContent = isFontCollapsed ? '▶' : '▼';
+    fontCollapseIcon.style.cssText = 'font-size:10px;color:var(--text-muted);cursor:pointer;transition:transform 0.15s ease;';
+
     const fontLabel = fontHeader.createEl('span', { text: t('font.section') });
     fontLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);cursor:pointer;';
 
     const fontHint = fontHeader.createEl('span', { text: t('font.clickToLoad') });
     fontHint.style.cssText = 'font-size:10px;color:var(--text-muted);';
 
+    const fontBarChip = fontHeader.createEl('span');
+    fontBarChip.textContent = t('font.barChip');
+    fontBarChip.style.cssText = `
+      display:inline-flex;align-items:center;justify-content:center;
+      width:18px;height:18px;border-radius:50%;font-size:11px;font-weight:700;
+      cursor:pointer;user-select:none;transition:all 0.15s ease;
+      border:1px solid var(--background-modifier-border);
+      background:rgba(var(--mono-rgb-0),0.5);color:var(--text-muted);
+    `;
+    fontBarChip.title = _currentLang === 'zh' ? '添加状态栏字体按钮' : 'Add font button to status bar';
+    fontBarChip.addEventListener('mouseenter', () => {
+      fontBarChip.style.borderColor = 'var(--interactive-accent)';
+      fontBarChip.style.color = 'var(--interactive-accent)';
+    });
+    fontBarChip.addEventListener('mouseleave', () => {
+      fontBarChip.style.borderColor = 'var(--background-modifier-border)';
+      fontBarChip.style.color = 'var(--text-muted)';
+    });
+    fontBarChip.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (this.settings.fontBarButton) {
+        this._removeFontBarButton();
+        this.settings.fontBarButton = null;
+        await this.saveSettings();
+        fontBarChip.style.borderColor = 'var(--background-modifier-border)';
+        fontBarChip.style.background = 'rgba(var(--mono-rgb-0),0.5)';
+        fontBarChip.style.color = 'var(--text-muted)';
+      } else {
+        this.settings.fontBarButton = { text: t('font.barDefaultText'), css: '' };
+        await this.saveSettings();
+        this._createFontBarButton();
+        fontBarChip.style.borderColor = 'var(--interactive-accent)';
+        fontBarChip.style.background = 'var(--interactive-accent)';
+        fontBarChip.style.color = '#fff';
+      }
+    });
+    if (this.settings.fontBarButton) {
+      fontBarChip.style.borderColor = 'var(--interactive-accent)';
+      fontBarChip.style.background = 'var(--interactive-accent)';
+      fontBarChip.style.color = '#fff';
+    }
+
     const fontToggle = fontHeader.createEl('span');
     const isFontOn = !this._fontDisabled;
-    fontToggle.textContent = isFontOn ? t('font.enabled') : t('font.disabled');
+    fontToggle.textContent = isFontOn ? t('font.disabled') : t('font.enabled');
     fontToggle.style.cssText = `
       font-size:10px;padding:1px 8px;border-radius:8px;cursor:pointer;
       border:1px solid ${isFontOn ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
@@ -3146,7 +3297,7 @@ class SwiftSwitchPlugin extends Plugin {
       e.stopPropagation();
       this._fontDisabled = !this._fontDisabled;
       const on = !this._fontDisabled;
-      fontToggle.textContent = on ? t('font.enabled') : t('font.disabled');
+      fontToggle.textContent = on ? t('font.disabled') : t('font.enabled');
       fontToggle.style.borderColor = on ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
       fontToggle.style.background = on ? 'var(--interactive-accent)' : 'transparent';
       fontToggle.style.color = on ? '#fff' : 'var(--text-muted)';
@@ -3155,10 +3306,11 @@ class SwiftSwitchPlugin extends Plugin {
     });
 
     const fontChipsContainer = fontArea.createDiv();
-    fontChipsContainer.style.cssText = 'display:none;flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;padding:4px;';
+    fontChipsContainer.setAttribute('data-ss-font-chips', '');
+    fontChipsContainer.style.cssText = `display:${isFontCollapsed ? 'none' : 'flex'};flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;padding:4px;`;
 
     const fontSettingsPanel = fontArea.createDiv();
-    fontSettingsPanel.style.cssText = 'display:none;margin-top:6px;padding:8px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.3);';
+    fontSettingsPanel.style.cssText = `display:${isFontCollapsed ? 'none' : 'block'};margin-top:6px;padding:8px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.3);`;
 
     let fontsLoaded = false;
 
@@ -3422,25 +3574,44 @@ class SwiftSwitchPlugin extends Plugin {
       });
     };
 
+    const toggleFontCollapse = async (forceState) => {
+      const collapsed = forceState !== undefined ? forceState : !this.settings.fontCollapsed;
+      this.settings.fontCollapsed = collapsed;
+      await this.saveSettings();
+      fontCollapseIcon.textContent = collapsed ? '▶' : '▼';
+      if (collapsed) {
+        fontChipsContainer.style.display = 'none';
+        fontSettingsPanel.style.display = 'none';
+        fontHint.textContent = t('font.clickToLoad');
+      } else {
+        if (fontsLoaded) {
+          fontChipsContainer.style.display = 'flex';
+          if (this.settings.activeFont || this.settings.fontColor || this.settings.fontLineHeight || this.settings.fontMarginL || this.settings.fontMarginR) {
+            fontSettingsPanel.style.display = 'block';
+          }
+        }
+      }
+    };
+    fontCollapseIcon.addEventListener('click', () => toggleFontCollapse());
+
     fontLabel.addEventListener('click', async () => {
-      if (fontsLoaded) {
-        const visible = fontChipsContainer.style.display !== 'none';
-        fontChipsContainer.style.display = visible ? 'none' : 'flex';
-        fontSettingsPanel.style.display = (!visible && (this.settings.activeFont || this.settings.fontColor || this.settings.fontLineHeight || this.settings.fontMarginL || this.settings.fontMarginR)) ? 'block' : 'none';
-        fontHint.textContent = visible ? t('font.clickToLoad') : '';
+      if (!fontsLoaded) {
+        fontHint.textContent = t('font.loading');
+        const fonts = await this.getSystemFonts();
+        fontsLoaded = fonts;
+        if (fonts.length === 0) {
+          fontHint.textContent = t('font.noFonts');
+          return;
+        }
+        fontHint.textContent = '';
+        fontChipsContainer.style.display = 'flex';
+        renderFontChips(fonts);
+        renderFontSettings();
+        await toggleFontCollapse(false);
         return;
       }
-      fontHint.textContent = t('font.loading');
-      const fonts = await this.getSystemFonts();
-      fontsLoaded = fonts;
-      if (fonts.length === 0) {
-        fontHint.textContent = t('font.noFonts');
-        return;
-      }
-      fontHint.textContent = '';
-      fontChipsContainer.style.display = 'flex';
-      renderFontChips(fonts);
-      renderFontSettings();
+      const isCurrentlyVisible = fontChipsContainer.style.display !== 'none';
+      await toggleFontCollapse(isCurrentlyVisible);
     });
 
     // ── 底部：其他插件链接 ────────────────────────────────────────────
@@ -4041,6 +4212,591 @@ class SwiftSwitchPlugin extends Plugin {
     });
 
     setTimeout(() => titleInput.focus(), 50);
+  }
+
+  // ─── 状态栏字体按钮 ──────────────────────────────────────────────────
+  _createFontBarButton() {
+    this._removeFontBarButton();
+    const fb = this.settings.fontBarButton;
+    if (!fb) return;
+
+    const el = this.addStatusBarItem();
+    el.id = 'ss-font-bar-button';
+    el.setText(fb.text || t('font.barDefaultText'));
+    el.title = t('font.barTitle');
+    el.style.cursor = 'pointer';
+    el.style.opacity = '0.8';
+
+    const hasCustomCss = fb.css && fb.css.trim();
+
+    if (hasCustomCss) {
+      const scopedClassName = this._applyFontBarCustomCss(fb.css);
+      if (scopedClassName) {
+        el.className += ' ' + scopedClassName;
+      }
+    }
+
+    el.addEventListener('mouseenter', () => {
+      this._openFontManagerPopup(el);
+    });
+
+    el.addEventListener('wheel', async (e) => {
+      e.preventDefault();
+      const favorites = this.settings.fontFavorites || [];
+      if (favorites.length === 0) {
+        new Notice(t('font.noFavorites'));
+        return;
+      }
+      const cur = this.settings.activeFont || '';
+      let idx = favorites.indexOf(cur);
+      if (e.deltaY > 0) {
+        idx = idx < favorites.length - 1 ? idx + 1 : -1;
+      } else {
+        idx = idx > 0 ? idx - 1 : -1;
+      }
+      this.settings.activeFont = idx >= 0 ? favorites[idx] : '';
+      this.applyFontSettings();
+      await this.saveSettings();
+      new Notice(idx >= 0 ? favorites[idx] : t('font.default'));
+    }, { passive: false });
+
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._showFontBarContextMenu(e);
+    });
+
+    this._fontBarEl = el;
+  }
+
+  _removeFontBarButton() {
+    if (this._fontBarEl) {
+      this._fontBarEl.remove();
+      this._fontBarEl = null;
+    }
+    const styleEl = document.getElementById('ss-fontbar-custom-style');
+    if (styleEl) styleEl.remove();
+  }
+
+  _applyFontBarCustomCss(cssText) {
+    const styleId = 'ss-fontbar-custom-style';
+    const old = document.getElementById(styleId);
+    if (old) old.remove();
+    if (!cssText || !cssText.trim()) return null;
+    const classMatch = cssText.match(/\.([a-zA-Z_\u4e00-\u9fff][\w\u4e00-\u9fff-]*)/);
+    if (!classMatch) return null;
+    const rawClassName = classMatch[1];
+    const scopedClassName = `ss-fontbar-${rawClassName}`;
+    const escapedRaw = rawClassName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const scopedCss = cssText.replace(
+      new RegExp(`\\.${escapedRaw}`, 'g'),
+      `.${scopedClassName}`
+    );
+    const styleElement = document.createElement('style');
+    styleElement.id = styleId;
+    styleElement.textContent = scopedCss;
+    document.head.appendChild(styleElement);
+    return scopedClassName;
+  }
+
+  _showFontBarContextMenu(e) {
+    const menu = document.createElement('div');
+    menu.style.cssText = `
+      position:fixed;z-index:10001;background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+      border:1px solid var(--background-modifier-border);border-radius:6px;
+      box-shadow:0 4px 16px rgba(0,0,0,0.25);padding:4px 0;min-width:120px;
+    `;
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+
+    const mkItem = (label, action) => {
+      const item = document.createElement('div');
+      item.textContent = label;
+      item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);';
+      item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
+      item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+      item.addEventListener('click', async () => { menu.remove(); await action(); });
+      menu.appendChild(item);
+    };
+
+    mkItem(t('font.barEdit'), () => this._showFontBarEditForm());
+    mkItem(_currentLang === 'zh' ? '移除' : 'Remove', async () => {
+      this._removeFontBarButton();
+      this.settings.fontBarButton = null;
+      await this.saveSettings();
+    });
+
+    document.body.appendChild(menu);
+    const closeMenu = (evt) => {
+      if (!menu.contains(evt.target)) { menu.remove(); document.removeEventListener('click', closeMenu); }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+    requestAnimationFrame(() => {
+      const rect = menu.getBoundingClientRect();
+      let x = e.clientX, y = e.clientY;
+      if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 4;
+      if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 4;
+      if (x < 0) x = 4;
+      if (y < 0) y = 4;
+      menu.style.left = x + 'px';
+      menu.style.top = y + 'px';
+    });
+  }
+
+  _showFontBarEditForm() {
+    const fb = this.settings.fontBarButton || { text: '', css: '' };
+
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:10002;';
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      position:fixed;
+      background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+      border:1px solid var(--background-modifier-border);border-radius:8px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.3);z-index:10003;
+      padding:16px 20px;min-width:360px;max-width:520px;max-height:80vh;overflow-y:auto;
+    `;
+    requestAnimationFrame(() => {
+      const w = dialog.offsetWidth, h = dialog.offsetHeight;
+      dialog.style.left = Math.round((window.innerWidth - w) / 2) + 'px';
+      dialog.style.top = Math.round((window.innerHeight - h) / 2) + 'px';
+    });
+
+    const label = dialog.createEl('div', { text: t('font.barEditTitle') });
+    label.style.cssText = 'font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text-normal);';
+
+    const textLabel = dialog.createEl('div', { text: t('font.barEditText') });
+    textLabel.style.cssText = 'font-size:12px;color:var(--text-muted);margin-bottom:4px;';
+
+    const textInput = dialog.createEl('input', { type: 'text' });
+    textInput.value = fb.text || t('font.barDefaultText');
+    textInput.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);margin-bottom:10px;';
+
+    const cssLabel = dialog.createEl('div', { text: t('font.barEditStyle') });
+    cssLabel.style.cssText = 'font-size:12px;color:var(--text-muted);margin-bottom:4px;';
+
+    const cssInput = dialog.createEl('textarea');
+    cssInput.value = fb.css || '';
+    cssInput.style.cssText = 'width:100%;height:140px;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;font-family:monospace;font-size:11px;resize:vertical;background:var(--background-primary);color:var(--text-normal);margin-bottom:10px;';
+
+    const btnRow = dialog.createDiv();
+    btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+
+    const cancelBtn = btnRow.createEl('button', { text: t('btn.cancel') });
+    cancelBtn.addEventListener('click', () => { backdrop.remove(); dialog.remove(); });
+
+    const saveBtn = btnRow.createEl('button', { text: t('btn.save') });
+    saveBtn.style.cssText = 'background:var(--interactive-accent);color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;';
+    saveBtn.addEventListener('click', async () => {
+      this.settings.fontBarButton = {
+        text: textInput.value.trim() || t('font.barDefaultText'),
+        css: cssInput.value.trim(),
+      };
+      await this.saveSettings();
+      this._removeFontBarButton();
+      this._createFontBarButton();
+      backdrop.remove();
+      dialog.remove();
+    });
+
+    backdrop.addEventListener('click', () => { backdrop.remove(); dialog.remove(); });
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(dialog);
+    setTimeout(() => textInput.focus(), 50);
+  }
+
+  // ─── 独立字体管理面板 ──────────────────────────────────────────────
+  _openFontManagerPopup(triggerEl) {
+    const existing = document.getElementById('ss-font-popup');
+    if (existing) return;
+
+    const popup = document.createElement('div');
+    popup.id = 'ss-font-popup';
+    popup.style.cssText = `
+      position:fixed;
+      background:rgba(var(--mono-rgb-0),0.75);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);
+      border:1px solid rgba(255,255,255,0.12);border-radius:12px;
+      box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;
+      padding:16px 20px;min-width:360px;min-height:200px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;
+    `;
+
+    let isPinned = false;
+    let isDraggingPopup = false, dragOffX = 0, dragOffY = 0;
+
+    const positionAtBottomRight = () => {
+      const pw = 480;
+      popup.style.left = Math.max(4, window.innerWidth - pw - 16) + 'px';
+      popup.style.top = Math.max(4, window.innerHeight - Math.min(popup.offsetHeight || 400, window.innerHeight * 0.9) - 16) + 'px';
+    };
+
+    const header = popup.createDiv();
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;cursor:move;';
+
+    const title = header.createEl('h3', { text: t('font.barTitle') });
+    title.style.cssText = 'margin:0;font-size:15px;color:var(--text-normal);';
+
+    const closeBtn = header.createEl('span');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'cursor:pointer;font-size:16px;color:var(--text-muted);padding:2px 6px;';
+    closeBtn.addEventListener('click', () => popup.remove());
+
+    header.addEventListener('mousedown', (e) => {
+      if (e.target === closeBtn) return;
+      isDraggingPopup = true;
+      const rect = popup.getBoundingClientRect();
+      dragOffX = e.clientX - Math.round(rect.left);
+      dragOffY = e.clientY - Math.round(rect.top);
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!isDraggingPopup) return;
+      popup.style.left = Math.round(e.clientX - dragOffX) + 'px';
+      popup.style.top = Math.round(e.clientY - dragOffY) + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      if (isDraggingPopup) {
+        isDraggingPopup = false;
+        isPinned = true;
+      }
+    });
+
+    // ── 启用/禁用 ──────────────────────────────────────────────────
+    const toggleRow = popup.createDiv();
+    toggleRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
+
+    const fontToggle = toggleRow.createEl('span');
+    const isFontOn = !this._fontDisabled;
+    fontToggle.textContent = isFontOn ? t('font.disabled') : t('font.enabled');
+    fontToggle.style.cssText = `
+      font-size:10px;padding:1px 8px;border-radius:8px;cursor:pointer;
+      border:1px solid ${isFontOn ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
+      background:${isFontOn ? 'var(--interactive-accent)' : 'transparent'};
+      color:${isFontOn ? '#fff' : 'var(--text-muted)'};
+      user-select:none;transition:all 0.15s ease;
+    `;
+    fontToggle.addEventListener('click', async () => {
+      this._fontDisabled = !this._fontDisabled;
+      const on = !this._fontDisabled;
+      fontToggle.textContent = on ? t('font.disabled') : t('font.enabled');
+      fontToggle.style.borderColor = on ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+      fontToggle.style.background = on ? 'var(--interactive-accent)' : 'transparent';
+      fontToggle.style.color = on ? '#fff' : 'var(--text-muted)';
+      this.applyFontSettings();
+      await this.saveSettings();
+    });
+
+    const currentFontLabel = toggleRow.createEl('span');
+    currentFontLabel.textContent = this.settings.activeFont ? this.settings.activeFont : t('font.default');
+    currentFontLabel.style.cssText = 'font-size:11px;color:var(--text-muted);margin-left:auto;';
+
+    // ── 字体 chips ──────────────────────────────────────────────────
+    const fontChipsContainer = popup.createDiv();
+    fontChipsContainer.style.cssText = 'display:none;flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;padding:4px;';
+
+    const fontSettingsPanel = popup.createDiv();
+    fontSettingsPanel.style.cssText = 'display:none;margin-top:6px;padding:8px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.3);';
+
+    let fontsLoaded = false;
+
+    const applyFontChipStyle = (chip, star, active) => {
+      chip.style.borderColor = active ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+      chip.style.background = active ? 'var(--interactive-accent)' : 'var(--background-primary)';
+      chip.style.color = active ? '#fff' : 'var(--text-normal)';
+      star.style.borderColor = active ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+      star.style.background = active ? 'var(--interactive-accent)' : 'var(--background-primary)';
+    };
+
+    const renderFontChips = (fonts) => {
+      fontChipsContainer.innerHTML = '';
+      const favorites = this.settings.fontFavorites || [];
+
+      const defaultChipWrap = fontChipsContainer.createDiv();
+      defaultChipWrap.style.cssText = 'display:inline-flex;align-items:center;gap:0;';
+      const isDefaultActive = !this.settings.activeFont;
+      const defaultChip = defaultChipWrap.createEl('span');
+      defaultChip.textContent = t('font.default');
+      defaultChip.style.cssText = `
+        display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;
+        user-select:none;transition:all 0.15s ease;
+        border:1px solid ${isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
+        background:${isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-primary)'};
+        color:${isDefaultActive ? '#fff' : 'var(--text-normal)'};
+      `;
+      const defaultStar = defaultChipWrap.createEl('span');
+      defaultStar.style.cssText = 'display:none;';
+
+      let defaultPreviewing = false;
+      defaultChip.addEventListener('mouseenter', () => {
+        if (isDefaultActive) return;
+        defaultPreviewing = true;
+        defaultChip._prevFont = this.settings.activeFont;
+        this.settings.activeFont = '';
+        this.applyFontSettings();
+        defaultChip.style.borderColor = 'var(--interactive-accent)';
+        defaultChip.style.background = 'var(--interactive-accent)';
+        defaultChip.style.color = '#fff';
+      });
+      defaultChip.addEventListener('mouseleave', () => {
+        if (!defaultPreviewing) return;
+        defaultPreviewing = false;
+        this.settings.activeFont = defaultChip._prevFont;
+        this.applyFontSettings();
+        defaultChip.style.borderColor = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+        defaultChip.style.background = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-primary)';
+        defaultChip.style.color = isDefaultActive ? '#fff' : 'var(--text-normal)';
+      });
+      defaultChip.addEventListener('click', async () => {
+        if (defaultPreviewing) {
+          defaultPreviewing = false;
+          this.settings.activeFont = defaultChip._prevFont;
+          this.applyFontSettings();
+        }
+        this.settings.activeFont = '';
+        this.applyFontSettings();
+        await this.saveSettings();
+        currentFontLabel.textContent = t('font.default');
+        renderFontChips(fonts);
+        renderFontSettings();
+      });
+
+      const sorted = [...fonts].sort((a, b) => {
+        const aFav = favorites.includes(a) ? 0 : 1;
+        const bFav = favorites.includes(b) ? 0 : 1;
+        return aFav - bFav || a.localeCompare(b);
+      });
+
+      sorted.forEach(fontName => {
+        const isFav = favorites.includes(fontName);
+        const isActive = this.settings.activeFont === fontName;
+
+        const chipWrap = fontChipsContainer.createDiv();
+        chipWrap.style.cssText = 'display:inline-flex;align-items:center;gap:0;';
+
+        const chip = chipWrap.createEl('span');
+        chip.textContent = fontName;
+        chip.style.cssText = `
+          display:inline-block;padding:2px 4px 2px 8px;border-radius:12px 0 0 12px;font-size:11px;cursor:pointer;
+          user-select:none;transition:all 0.15s ease;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+          border:1px solid ${isActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
+          border-right:none;
+          background:${isActive ? 'var(--interactive-accent)' : 'var(--background-primary)'};
+          color:${isActive ? '#fff' : 'var(--text-normal)'};
+          font-family:"${fontName}";
+        `;
+
+        const star = chipWrap.createEl('span');
+        star.textContent = isFav ? '★' : '☆';
+        star.style.cssText = `
+          display:inline-flex;align-items:center;justify-content:center;
+          padding:2px 6px;border-radius:0 12px 12px 0;font-size:11px;cursor:pointer;
+          user-select:none;transition:all 0.15s ease;
+          border:1px solid ${isActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
+          border-left:none;
+          background:${isActive ? 'var(--interactive-accent)' : 'var(--background-primary)'};
+          color:${isFav ? '#f5a623' : 'var(--text-muted)'};
+        `;
+
+        let fontPreviewing = false;
+        chip.addEventListener('mouseenter', () => {
+          if (isActive) return;
+          fontPreviewing = true;
+          chip._prevFont = this.settings.activeFont;
+          this.settings.activeFont = fontName;
+          this.applyFontSettings();
+          chip.style.borderColor = 'var(--interactive-accent)';
+          chip.style.background = 'var(--interactive-accent)';
+          chip.style.color = '#fff';
+          star.style.borderColor = 'var(--interactive-accent)';
+          star.style.background = 'var(--interactive-accent)';
+        });
+        chip.addEventListener('mouseleave', () => {
+          if (!fontPreviewing) return;
+          fontPreviewing = false;
+          this.settings.activeFont = chip._prevFont;
+          this.applyFontSettings();
+          applyFontChipStyle(chip, star, isActive);
+          star.style.color = isFav ? '#f5a623' : 'var(--text-muted)';
+        });
+
+        chip.addEventListener('click', async () => {
+          if (fontPreviewing) {
+            fontPreviewing = false;
+            this.settings.activeFont = chip._prevFont;
+            this.applyFontSettings();
+          }
+          if (this.settings.activeFont === fontName) {
+            this.settings.activeFont = '';
+          } else {
+            this.settings.activeFont = fontName;
+          }
+          this.applyFontSettings();
+          await this.saveSettings();
+          currentFontLabel.textContent = this.settings.activeFont || t('font.default');
+          renderFontChips(fonts);
+          renderFontSettings();
+        });
+
+        star.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!this.settings.fontFavorites) this.settings.fontFavorites = [];
+          const idx = this.settings.fontFavorites.indexOf(fontName);
+          if (idx >= 0) {
+            this.settings.fontFavorites.splice(idx, 1);
+          } else {
+            this.settings.fontFavorites.push(fontName);
+          }
+          await this.saveSettings();
+          renderFontChips(fonts);
+        });
+      });
+    };
+
+    const renderFontSettings = () => {
+      fontSettingsPanel.innerHTML = '';
+      if (!this.settings.activeFont && !this.settings.fontColor && this.settings.fontOpacity >= 1 && !this.settings.fontLineHeight && !this.settings.fontMarginL && !this.settings.fontMarginR) {
+        fontSettingsPanel.style.display = 'none';
+        return;
+      }
+      fontSettingsPanel.style.display = 'block';
+
+      const row1 = fontSettingsPanel.createDiv();
+      row1.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+
+      const mkLabel = (text) => {
+        const el = document.createElement('span');
+        el.textContent = text;
+        el.style.cssText = 'font-size:10px;color:var(--text-muted);white-space:nowrap;';
+        return el;
+      };
+
+      row1.appendChild(mkLabel(t('font.color')));
+      const colorInput = row1.createEl('input', { type: 'color' });
+      colorInput.value = this.settings.fontColor || '#ffffff';
+      colorInput.style.cssText = 'width:28px;height:22px;padding:0;cursor:pointer;';
+      colorInput.addEventListener('input', async () => {
+        this.settings.fontColor = colorInput.value;
+        this.applyFontSettings();
+        await this.saveSettings();
+      });
+
+      row1.appendChild(mkLabel(t('font.opacity')));
+      const opSlider = row1.createEl('input', { type: 'range' });
+      opSlider.min = '10'; opSlider.max = '100'; opSlider.value = String(Math.round((this.settings.fontOpacity ?? 1) * 100));
+      opSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
+      const opVal = row1.createEl('span', { text: Math.round((this.settings.fontOpacity ?? 1) * 100) + '%' });
+      opVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
+      opSlider.addEventListener('input', async () => {
+        const v = parseInt(opSlider.value) / 100;
+        opVal.textContent = opSlider.value + '%';
+        this.settings.fontOpacity = v;
+        this.applyFontSettings();
+        await this.saveSettings();
+      });
+
+      row1.appendChild(mkLabel(t('font.lineHeight')));
+      const lhSlider = row1.createEl('input', { type: 'range' });
+      lhSlider.min = '10'; lhSlider.max = '30'; lhSlider.step = '1'; lhSlider.value = String(Math.round((this.settings.fontLineHeight ?? 1.5) * 10));
+      lhSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
+      const lhVal = row1.createEl('span', { text: (this.settings.fontLineHeight ?? 0) > 0 ? (this.settings.fontLineHeight).toFixed(1) : '-' });
+      lhVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:22px;';
+      lhSlider.addEventListener('input', async () => {
+        const v = parseInt(lhSlider.value) / 10;
+        lhVal.textContent = v.toFixed(1);
+        this.settings.fontLineHeight = v;
+        this.applyFontSettings();
+        await this.saveSettings();
+      });
+
+      const row2 = fontSettingsPanel.createDiv();
+      row2.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;';
+
+      row2.appendChild(mkLabel(t('font.marginL')));
+      const mlSlider = row2.createEl('input', { type: 'range' });
+      mlSlider.min = '0'; mlSlider.max = '80'; mlSlider.value = String(this.settings.fontMarginL ?? 0);
+      mlSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
+      const mlVal = row2.createEl('span', { text: (this.settings.fontMarginL ?? 0) + 'px' });
+      mlVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
+      mlSlider.addEventListener('input', async () => {
+        const v = parseInt(mlSlider.value);
+        mlVal.textContent = v + 'px';
+        this.settings.fontMarginL = v;
+        this.applyFontSettings();
+        await this.saveSettings();
+      });
+
+      row2.appendChild(mkLabel(t('font.marginR')));
+      const mrSlider = row2.createEl('input', { type: 'range' });
+      mrSlider.min = '0'; mrSlider.max = '80'; mrSlider.value = String(this.settings.fontMarginR ?? 0);
+      mrSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
+      const mrVal = row2.createEl('span', { text: (this.settings.fontMarginR ?? 0) + 'px' });
+      mrVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
+      mrSlider.addEventListener('input', async () => {
+        const v = parseInt(mrSlider.value);
+        mrVal.textContent = v + 'px';
+        this.settings.fontMarginR = v;
+        this.applyFontSettings();
+        await this.saveSettings();
+      });
+
+      const resetBtn = row2.createEl('span');
+      resetBtn.textContent = t('font.reset');
+      resetBtn.style.cssText = `
+        font-size:10px;padding:1px 8px;border-radius:8px;cursor:pointer;
+        border:1px solid var(--background-modifier-border);color:var(--text-muted);
+        user-select:none;margin-left:auto;
+      `;
+      resetBtn.addEventListener('click', async () => {
+        this.settings.activeFont = '';
+        this.settings.fontColor = '';
+        this.settings.fontOpacity = 1;
+        this.settings.fontLineHeight = 0;
+        this.settings.fontMarginL = 0;
+        this.settings.fontMarginR = 0;
+        this.applyFontSettings();
+        await this.saveSettings();
+        currentFontLabel.textContent = t('font.default');
+        renderFontChips(fontsLoaded);
+        renderFontSettings();
+        new Notice(t('font.resetDone'));
+      });
+    };
+
+    // 自动加载字体
+    (async () => {
+      const fonts = await this.getSystemFonts();
+      if (fonts.length === 0) return;
+      fontsLoaded = fonts;
+      fontChipsContainer.style.display = 'flex';
+      renderFontChips(fonts);
+      renderFontSettings();
+      requestAnimationFrame(positionAtBottomRight);
+    })();
+
+    // 鼠标离开弹窗区域关闭（仅未固定时）
+    let leaveTimer = null;
+    const scheduleClose = () => {
+      if (isPinned) return;
+      leaveTimer = setTimeout(() => {
+        if (document.getElementById('ss-font-popup') && !isPinned) {
+          popup.remove();
+        }
+      }, 300);
+    };
+    const cancelClose = () => {
+      if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
+    };
+
+    popup.addEventListener('mouseleave', scheduleClose);
+    popup.addEventListener('mouseenter', cancelClose);
+
+    if (triggerEl) {
+      triggerEl.addEventListener('mouseleave', scheduleClose);
+      triggerEl.addEventListener('mouseenter', cancelClose);
+    }
+
+    document.body.appendChild(popup);
+    requestAnimationFrame(positionAtBottomRight);
   }
 }
 
