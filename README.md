@@ -50,6 +50,10 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 <details>
 <summary>Changelog</summary>
 
+### v1.1.6 (2026-07-02)
+
+- **Mobile Support** — Support background/image switching on mobile; add ribbon icon entry; mobile font color/opacity/line-height/margin settings
+
 ### v1.1.5 (2026-07-01)
 
 - **Mac Edit Crash Fix** — Fixed `Cannot read properties of null` error when editing snippets via right-click menu on macOS; click event no longer bubbles to overlay and closes popup prematurely

@@ -1,4 +1,8 @@
-## 🆕 v1.1.5 (2026-07-01)
+## 🆕 v1.1.6 (2026-07-02)
+
+- **Mobile Support / 支持移动端背景切换** — Background/image switching now works on Obsidian Mobile; ribbon icon entry; mobile font color/opacity/line-height/margin settings; pic/phone/ subfolder for mobile-specific images / 背景图片切换现已支持 Obsidian 移动端；左侧栏图标入口；手机端字体颜色/透明度/行间距/边距设置；pic/phone/ 子目录存放手机专属图片
+
+## v1.1.5 (2026-07-01)
 
 - **Mac Edit Crash Fix / Mac编辑崩溃修复** — Fixed `Cannot read properties of null` error when editing snippets via right-click menu on macOS; click event no longer bubbles to overlay and closes popup prematurely / 修复 macOS 上右键菜单编辑 Snippet 时的空指针崩溃；点击事件不再冒泡到 overlay 导致 popup 提前关闭
 

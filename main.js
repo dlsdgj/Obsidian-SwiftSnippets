@@ -1,6 +1,12 @@
-const { Plugin, Notice } = require('obsidian');
-const nodePath = require('path');
-const nodeFs = require('fs');
+const { Plugin, Notice, Platform } = require('obsidian');
+const isMobile = Platform.isMobile;
+const nodePath = isMobile ? null : require('path');
+const nodeFs = isMobile ? null : require('fs');
+
+function _joinPath(...parts) {
+  if (nodePath) return nodePath.join(...parts);
+  return parts.join('/');
+}
 
 // ─── i18n ────────────────────────────────────────────────────────────────────
 let _currentLang = 'en';
@@ -192,7 +198,7 @@ const i18n = {
     'mode.switched': 'Mode switched',
     'mode.switchFailed': 'Failed to switch mode',
     'pull.hint': 'Pull to switch mode',
-    'eyeCare.section': 'Background',
+    'eyeCare.section': 'bg',
     'eyeCare.default': 'Default',
     'eyeCare.cream': 'Cream',
     'eyeCare.green': 'Green',
@@ -225,7 +231,7 @@ const i18n = {
     'eyeCare.imgOpacity': 'Opacity',
     'eyeCare.imgTile': 'Tile',
     'eyeCare.imgStretch': 'Stretch',
-    'eyeCare.imgTitle': 'Image',
+    'eyeCare.imgTitle': 'image',
     'eyeCare.imgHelp': 'Put image files into .obsidian\\plugins\\SwiftSnippets\\pic\\',
     'eyeCare.imgOpenFolder': 'Click to open folder',
     'eyeCare.imgRename': 'Rename',
@@ -324,12 +330,17 @@ class SwiftSwitchPlugin extends Plugin {
 
     this.addCommand({
       id: 'open-snippets-popup',
-      name: 'Open Snippets Manager',
+      name: isMobile ? 'SwiftSwitch: 背景与外观' : 'Open Snippets Manager',
       callback: () => this.openSnippetsPopup(),
     });
 
-    // 恢复悬浮按钮
-    if (this.settings.floatingButton) {
+    // 手机端：左侧栏 ribbon 图标
+    if (isMobile) {
+      this.addRibbonIcon('palette', 'SwiftSwitch', () => this.openSnippetsPopup());
+    }
+
+    // 恢复悬浮按钮（手机端跳过）
+    if (!isMobile && this.settings.floatingButton) {
       this.createFloatingButton();
     }
     // 恢复护眼色
@@ -337,11 +348,12 @@ class SwiftSwitchPlugin extends Plugin {
       this.applyEyeCareColor();
     }
 
-    if (this.settings.activeFont) {
+    // 字体功能
+    if (this.settings.activeFont || this.settings.fontColor) {
       this.applyFontSettings();
     }
 
-    if (this.settings.fontBarButton) {
+    if (!isMobile && this.settings.fontBarButton) {
       this._createFontBarButton();
     }
 
@@ -349,7 +361,7 @@ class SwiftSwitchPlugin extends Plugin {
     requestIdleCallback(() => {
       this._syncPicFolder();
       this._exportEyeCareSnippets();
-      setTimeout(() => this.getSystemFonts(), 1000);
+      if (!isMobile) setTimeout(() => this.getSystemFonts(), 1000);
     });
 
     // 页面风格记忆：监听活动 leaf 变化
@@ -382,7 +394,7 @@ class SwiftSwitchPlugin extends Plugin {
       if (this.settings.eyeCareColor) {
         this.applyEyeCareColor();
       }
-      if (this.settings.floatingButton) {
+      if (!isMobile && this.settings.floatingButton) {
         this.createFloatingButton();
       }
       if (this.settings.fontColor || this.settings.activeFont) {
@@ -467,9 +479,14 @@ class SwiftSwitchPlugin extends Plugin {
       } catch (_e) {}
       if (enabledSnippets.length === 0) {
         try {
-          const appearancePath = nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'appearance.json');
-          const appearance = JSON.parse(nodeFs.readFileSync(appearancePath, 'utf-8'));
-          enabledSnippets = appearance.enabledCssSnippets || [];
+          if (isMobile) {
+            const appearance = JSON.parse(await this.app.vault.adapter.read('.obsidian/appearance.json'));
+            enabledSnippets = appearance.enabledCssSnippets || [];
+          } else {
+            const appearancePath = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'appearance.json');
+            const appearance = JSON.parse(nodeFs.readFileSync(appearancePath, 'utf-8'));
+            enabledSnippets = appearance.enabledCssSnippets || [];
+          }
         } catch (_e) {
           enabledSnippets = [];
         }
@@ -478,11 +495,19 @@ class SwiftSwitchPlugin extends Plugin {
 
     let snippetFiles = [];
     try {
-      const snippetsDir = nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'snippets');
-      if (nodeFs.existsSync(snippetsDir)) {
-        snippetFiles = nodeFs.readdirSync(snippetsDir)
+      if (isMobile) {
+        const files = await this.app.vault.adapter.list('.obsidian/snippets');
+        snippetFiles = (files.files || [])
+          .map(f => f.replace(/^.*[\/\\]/, ''))
           .filter(f => f.endsWith('.css') || f.endsWith('.js'))
           .map(f => f.replace(/\.(css|js)$/, ''));
+      } else {
+        const snippetsDir = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'snippets');
+        if (nodeFs.existsSync(snippetsDir)) {
+          snippetFiles = nodeFs.readdirSync(snippetsDir)
+            .filter(f => f.endsWith('.css') || f.endsWith('.js'))
+            .map(f => f.replace(/\.(css|js)$/, ''));
+        }
       }
     } catch (_e) {
       snippetFiles = [];
@@ -496,18 +521,30 @@ class SwiftSwitchPlugin extends Plugin {
   async getThemeInfo() {
     let currentTheme = '';
     try {
-      const appearancePath = nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'appearance.json');
-      const appearance = JSON.parse(nodeFs.readFileSync(appearancePath, 'utf-8'));
-      currentTheme = appearance.cssTheme || '';
+      if (isMobile) {
+        const appearance = JSON.parse(await this.app.vault.adapter.read('.obsidian/appearance.json'));
+        currentTheme = appearance.cssTheme || '';
+      } else {
+        const appearancePath = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'appearance.json');
+        const appearance = JSON.parse(nodeFs.readFileSync(appearancePath, 'utf-8'));
+        currentTheme = appearance.cssTheme || '';
+      }
     } catch (_e) {}
 
     let themeDirs = [];
     try {
-      const themesDir = nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'themes');
-      if (nodeFs.existsSync(themesDir)) {
-        themeDirs = nodeFs.readdirSync(themesDir, { withFileTypes: true })
-          .filter(d => d.isDirectory())
-          .map(d => d.name);
+      if (isMobile) {
+        const result = await this.app.vault.adapter.list('.obsidian/themes');
+        themeDirs = (result.folders || [])
+          .map(f => f.replace(/^.*[\/\\]/, ''))
+          .filter(n => n.length > 0);
+      } else {
+        const themesDir = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'themes');
+        if (nodeFs.existsSync(themesDir)) {
+          themeDirs = nodeFs.readdirSync(themesDir, { withFileTypes: true })
+            .filter(d => d.isDirectory())
+            .map(d => d.name);
+        }
       }
     } catch (_e) {}
 
@@ -554,7 +591,7 @@ class SwiftSwitchPlugin extends Plugin {
   }
 
   // ─── 应用护眼色 ──────────────────────────────────────────────────────
-  applyEyeCareColor() {
+  async applyEyeCareColor() {
     let styleEl = document.getElementById('ss-eyecare-style');
     if (!styleEl) {
       styleEl = document.createElement('style');
@@ -566,23 +603,44 @@ class SwiftSwitchPlugin extends Plugin {
       styleEl.textContent = '';
       this._removeOverlay('ss-edge-glow-overlay');
       this._removeOverlay('ss-cursor-glow-overlay');
+      this._removeOverlay('ss-bg-img-overlay');
       this._stopCursorTracking();
       return;
+    }
+    if (!key.startsWith('__img_')) {
+      this._removeOverlay('ss-bg-img-overlay');
     }
     if (key.startsWith('__img_')) {
       const imgIdx = parseInt(key.slice(6), 10);
       const imgItem = (this.settings.bgImages || [])[imgIdx];
-      if (!imgItem) { styleEl.textContent = ''; return; }
+      if (!imgItem) { styleEl.textContent = ''; this._removeOverlay('ss-bg-img-overlay'); return; }
       const picDir = this._getPluginDir();
       const resolvedUrl = this._resolveImageForMode(imgItem);
-      const fullPath = nodePath.join(picDir, 'pic', resolvedUrl);
+      const finalResolvedUrl = await this._resolvePhoneImageAsync(resolvedUrl);
+      const fullPath = _joinPath(picDir, 'pic', finalResolvedUrl);
       let imgUrl = '';
       try {
-        const buf = nodeFs.readFileSync(fullPath);
-        const ext = nodePath.extname(fullPath).toLowerCase();
-        const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml' };
-        const mime = mimeMap[ext] || 'image/png';
-        imgUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
+        if (isMobile) {
+          const vaultPath = _joinPath('.obsidian', 'plugins', 'SwiftSnippets', 'pic', finalResolvedUrl);
+          if (this._cachedImgUrl && this._cachedImgKey === key) {
+            imgUrl = this._cachedImgUrl;
+          } else {
+            const buf = await this.app.vault.adapter.readBinary(vaultPath);
+            const ext = finalResolvedUrl.substring(finalResolvedUrl.lastIndexOf('.')).toLowerCase();
+            const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml' };
+            const mime = mimeMap[ext] || 'image/png';
+            const blob = new Blob([buf], { type: mime });
+            imgUrl = URL.createObjectURL(blob);
+            this._cachedImgUrl = imgUrl;
+            this._cachedImgKey = key;
+          }
+        } else {
+          const buf = nodeFs.readFileSync(fullPath);
+          const ext = fullPath.substring(fullPath.lastIndexOf('.')).toLowerCase();
+          const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml' };
+          const mime = mimeMap[ext] || 'image/png';
+          imgUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
+        }
       } catch (e) {
         console.warn('[SwiftSnippets] Failed to load image:', fullPath, e);
         return;
@@ -593,6 +651,8 @@ class SwiftSwitchPlugin extends Plugin {
       const stretch = imgItem.stretch ?? false;
       const bg = isDark ? 'rgba(20,20,20,1)' : 'rgba(255,255,255,1)';
       const bgSec = isDark ? 'rgba(28,28,28,1)' : 'rgba(248,248,248,1)';
+      const tintR = isDark ? '20' : '255', tintG = isDark ? '20' : '255', tintB = isDark ? '20' : '255';
+      const tintAlpha = 1 - opacity;
       let bgSize, bgRepeat;
       if (stretch) {
         bgSize = '100% 100%';
@@ -613,32 +673,10 @@ class SwiftSwitchPlugin extends Plugin {
           --background-secondary: ${bgSec};
           --background-secondary-alt: ${bgSec};
           --background-modifier-border: ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'};
-          background-color: ${bg};
-          background-image: url('${imgUrl}');
+          background: linear-gradient(rgba(${tintR},${tintG},${tintB},${tintAlpha}), rgba(${tintR},${tintG},${tintB},${tintAlpha})), url('${imgUrl}');
           background-size: ${bgSize};
           background-position: center;
           background-repeat: ${bgRepeat};
-          position: relative;
-        }
-        .workspace-leaf-content::before,
-        .markdown-source-view::before,
-        .markdown-preview-view::before {
-          content: '';
-          position: absolute;
-          top: 0; left: 0; right: 0; bottom: 0;
-          background-color: ${isDark ? 'rgba(20,20,20,' + (1 - opacity) + ')' : 'rgba(255,255,255,' + (1 - opacity) + ')'};
-          pointer-events: none;
-          z-index: 0;
-        }
-        .workspace-leaf-content > :not(.minimap-container):not(.nav-header):not(.view-header),
-        .markdown-source-view > :not(.minimap-container),
-        .markdown-preview-view > :not(.minimap-container) {
-          position: relative;
-          z-index: 1;
-        }
-        .minimap-container {
-          position: absolute !important;
-          z-index: 10 !important;
         }
         .markdown-source-view .cm-s-obsidian,
         .markdown-preview-view .markdown-reading-view {
@@ -648,11 +686,13 @@ class SwiftSwitchPlugin extends Plugin {
           background: transparent !important;
         }
       `;
+      this._removeOverlay('ss-bg-img-overlay');
       this._removeOverlay('ss-edge-glow-overlay');
       this._removeOverlay('ss-cursor-glow-overlay');
       this._stopCursorTracking();
       return;
     }
+
     const isDark = document.body.classList.contains('theme-dark');
     if (key === 'edgeGlow') {
       const glowColor = isDark ? 'rgba(80,180,130,0.2)' : 'rgba(100,200,150,0.2)';
@@ -701,6 +741,7 @@ class SwiftSwitchPlugin extends Plugin {
   }
 
   async getSystemFonts() {
+    if (isMobile) return [];
     if (this._cachedFonts) return this._cachedFonts;
     try {
       const { execSync } = require('child_process');
@@ -726,7 +767,7 @@ class SwiftSwitchPlugin extends Plugin {
   applyFontSettings() {
     let styleEl = document.getElementById('ss-font-style');
     const s = this.settings;
-    if (this._fontDisabled || (!s.activeFont && !s.fontColor && s.fontOpacity >= 1 && !s.fontLineHeight && !s.fontMarginL && !s.fontMarginR)) {
+    if (this._fontDisabled || (!s.activeFont && !s.fontColor && s.fontOpacity >= 1 && !s.fontLineHeight && !mlActive && !mrActive)) {
       if (styleEl) styleEl.remove();
       return;
     }
@@ -738,8 +779,10 @@ class SwiftSwitchPlugin extends Plugin {
 
     const ff = s.activeFont || '';
     const lh = s.fontLineHeight > 0 ? s.fontLineHeight : '';
-    const ml = s.fontMarginL || '';
-    const mr = s.fontMarginR || '';
+    const ml = s.fontMarginL ?? 0;
+    const mr = s.fontMarginR ?? 0;
+    const mlActive = ml !== 0;
+    const mrActive = mr !== 0;
 
     let colorRule = '';
     if (s.fontColor || s.fontOpacity < 1) {
@@ -767,7 +810,7 @@ class SwiftSwitchPlugin extends Plugin {
       css += `.workspace-leaf-content[data-type="markdown"] .markdown-preview-view,
 .workspace-leaf-content[data-type="markdown"] .markdown-preview-sizer,
 .workspace-leaf-content[data-type="markdown"] .markdown-preview-view .markdown-rendered {
-  font-family: "${ff}", var(--font-text), sans-serif !important;${lh ? `\n  line-height: ${lh} !important;` : ''}${ml ? `\n  padding-left: ${ml}px !important;` : ''}${mr ? `\n  padding-right: ${mr}px !important;` : ''}
+  font-family: "${ff}", var(--font-text), sans-serif !important;${lh ? `\n  line-height: ${lh} !important;` : ''}${mlActive ? `\n  padding-left: ${ml}px !important;` : ''}${mrActive ? `\n  padding-right: ${mr}px !important;` : ''}
 }
 .workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-line,
 .workspace-leaf-content[data-type="markdown"] .cm-s-obsidian .cm-line {
@@ -797,12 +840,13 @@ class SwiftSwitchPlugin extends Plugin {
 }`;
     }
 
-    if (ml || mr) {
+    if (mlActive || mrActive) {
       css += `
-.workspace-leaf-content[data-type="markdown"] .markdown-preview-view {${ml ? `\n  padding-left: ${ml}px !important;` : ''}${mr ? `\n  padding-right: ${mr}px !important;` : ''}
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view,
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-sizer {${mlActive ? `\n  padding-left: ${ml}px !important;` : ''}${mrActive ? `\n  padding-right: ${mr}px !important;` : ''}
 }
 .workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-scroller,
-.workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-content {${ml ? `\n  padding-left: ${ml}px !important;` : ''}${mr ? `\n  padding-right: ${mr}px !important;` : ''}
+.workspace-leaf-content[data-type="markdown"] .markdown-source-view.mod-cm6 .cm-content {${mlActive ? `\n  padding-left: ${ml}px !important;` : ''}${mrActive ? `\n  padding-right: ${mr}px !important;` : ''}
 }`;
     }
 
@@ -838,27 +882,41 @@ class SwiftSwitchPlugin extends Plugin {
       const isDark = document.body.classList.contains('theme-dark');
       return isDark ? imgItem.urlDark : imgItem.url;
     }
+    if (isMobile) return imgItem.url;
     const imgFileName = imgItem.url;
-    const picDir = nodePath.join(this._getPluginDir(), 'pic');
+    const picDir = _joinPath(this._getPluginDir(), 'pic');
     const isDark = document.body.classList.contains('theme-dark');
-    const ext = nodePath.extname(imgFileName);
-    const base = nodePath.basename(imgFileName, ext);
+    const ext = imgFileName.substring(imgFileName.lastIndexOf('.'));
+    const base = imgFileName.substring(0, imgFileName.lastIndexOf('.'));
     const suffix = isDark ? '-dark' : '-light';
     const oppositeSuffix = isDark ? '-light' : '-dark';
     if (base.endsWith('-light') || base.endsWith('-dark')) {
       const targetBase = base.endsWith(suffix) ? base : base.replace(new RegExp('\\' + oppositeSuffix + '$'), suffix);
       const targetFile = targetBase + ext;
-      if (nodeFs.existsSync(nodePath.join(picDir, targetFile))) return targetFile;
+      if (nodeFs.existsSync(_joinPath(picDir, targetFile))) return targetFile;
       return imgFileName;
     }
     const themedFile = base + suffix + ext;
-    if (nodeFs.existsSync(nodePath.join(picDir, themedFile))) return themedFile;
+    if (nodeFs.existsSync(_joinPath(picDir, themedFile))) return themedFile;
     return imgFileName;
+  }
+
+
+  async _resolvePhoneImageAsync(resolvedUrl) {
+    if (!isMobile) return resolvedUrl;
+    const phonePath = 'phone/' + resolvedUrl;
+    const vaultPath = _joinPath('.obsidian', 'plugins', 'SwiftSnippets', 'pic', phonePath);
+    try {
+      const exists = await this.app.vault.adapter.exists(vaultPath);
+      return exists ? phonePath : resolvedUrl;
+    } catch (_e) {
+      return resolvedUrl;
+    }
   }
 
   _getPluginDir() {
     if (this.app && this.app.vault && this.app.vault.adapter && this.app.vault.adapter.basePath) {
-      return nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'plugins', 'SwiftSnippets');
+      return _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'plugins', 'SwiftSnippets');
     }
     if (this.manifest && this.manifest.dir) {
       return this.manifest.dir;
@@ -867,7 +925,8 @@ class SwiftSwitchPlugin extends Plugin {
   }
 
   _exportEyeCareSnippets() {
-    const snippetsDir = nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'snippets');
+    if (isMobile) return;
+    const snippetsDir = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'snippets');
     try {
       if (!nodeFs.existsSync(snippetsDir)) {
         nodeFs.mkdirSync(snippetsDir, { recursive: true });
@@ -981,7 +1040,7 @@ class SwiftSwitchPlugin extends Plugin {
     for (const [key, p] of Object.entries(allPresets)) {
       if ((this.settings.deletedPresets || []).includes(key)) continue;
       const fileName = `ss-${key}.css`;
-      const filePath = nodePath.join(snippetsDir, fileName);
+      const filePath = _joinPath(snippetsDir, fileName);
 
       const darkBg = p.darkBg;
       const darkBgSec = p.darkBgSec;
@@ -1047,16 +1106,28 @@ class SwiftSwitchPlugin extends Plugin {
   }
 
 
-  _syncPicFolder() {
-    const pluginDir = this._getPluginDir();
-    const picDir = nodePath.join(pluginDir, 'pic');
+  async _syncPicFolder() {
     try {
-      if (!nodeFs.existsSync(picDir)) {
-        nodeFs.mkdirSync(picDir, { recursive: true });
+      let files;
+      if (isMobile) {
+        const picVaultPath = '.obsidian/plugins/SwiftSnippets/pic';
+        try { await this.app.vault.adapter.mkdir(picVaultPath); } catch (_e) {}
+        const result = await this.app.vault.adapter.list(picVaultPath);
+        const imgExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
+        files = (result.files || [])
+          .map(f => f.replace(/^.*[\/\\]/, ''))
+          .filter(f => imgExts.some(ext => f.toLowerCase().endsWith(ext)));
+      } else {
+        const pluginDir = this._getPluginDir();
+        const picDir = _joinPath(pluginDir, 'pic');
+        if (!nodeFs.existsSync(picDir)) {
+          nodeFs.mkdirSync(picDir, { recursive: true });
+        }
+        const imgExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
+        files = nodeFs.readdirSync(picDir).filter(f => imgExts.some(ext => f.toLowerCase().endsWith(ext)));
       }
-      const imgExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
-      const files = nodeFs.readdirSync(picDir).filter(f => imgExts.some(ext => f.toLowerCase().endsWith(ext)));
-      console.log('[SwiftSnippets] picDir:', picDir, 'files:', files.length);
+      console.log('[SwiftSnippets] pic files:', files.length);
+      files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
       const existingMap = {};
       (this.settings.bgImages || []).forEach(img => {
         existingMap[img.label] = { opacity: img.opacity ?? 0.3, tile: img.tile ?? false, stretch: img.stretch ?? false };
@@ -1065,8 +1136,8 @@ class SwiftSwitchPlugin extends Plugin {
       const paired = new Set();
       const result = [];
       for (const f of files) {
-        const ext = nodePath.extname(f);
-        const base = nodePath.basename(f, ext);
+        const ext = f.substring(f.lastIndexOf('.'));
+        const base = f.substring(0, f.lastIndexOf('.'));
         if (base.endsWith('-light')) {
           const root = base.slice(0, -6);
           const darkFile = root + '-dark' + ext;
@@ -1089,8 +1160,8 @@ class SwiftSwitchPlugin extends Plugin {
       }
       for (const f of files) {
         if (paired.has(f)) continue;
-        const ext = nodePath.extname(f);
-        const base = nodePath.basename(f, ext);
+        const ext = f.substring(f.lastIndexOf('.'));
+        const base = f.substring(0, f.lastIndexOf('.'));
         if (base.endsWith('-dark')) {
           const root = base.slice(0, -5);
           const lightFile = root + '-light' + ext;
@@ -1134,12 +1205,13 @@ class SwiftSwitchPlugin extends Plugin {
 
   // ─── 旋转图片 90 度 ──────────────────────────────────────────────────
   async _rotateImage(imgUrl) {
-    const picDir = nodePath.join(this._getPluginDir(), 'pic');
-    const fullPath = nodePath.join(picDir, imgUrl);
+    if (isMobile) throw new Error('Not supported on mobile');
+    const picDir = _joinPath(this._getPluginDir(), 'pic');
+    const fullPath = _joinPath(picDir, imgUrl);
     if (!nodeFs.existsSync(fullPath)) throw new Error('File not found');
 
     const buf = nodeFs.readFileSync(fullPath);
-    const ext = nodePath.extname(fullPath).toLowerCase();
+    const ext = fullPath.substring(fullPath.lastIndexOf('.')).toLowerCase();
     const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp' };
     const mime = mimeMap[ext] || 'image/png';
     const dataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
@@ -2233,23 +2305,18 @@ class SwiftSwitchPlugin extends Plugin {
 
     const popup = document.createElement('div');
     popup.id = 'ss-snippets-popup';
-    popup.style.cssText = `
-      position:fixed;
-      background:rgba(var(--mono-rgb-0),0.75);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);
-      border:1px solid rgba(255,255,255,0.12);border-radius:12px;
-      box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;
-      padding:16px 20px;min-width:360px;min-height:200px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;
-    `;
+    popup.style.cssText = isMobile
+      ? `position:fixed;background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--background-modifier-border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:10000;padding:12px 14px;width:92vw;max-width:92vw;max-height:85vh;overflow-y:auto;overflow-x:hidden;`
+      : `position:fixed;background:rgba(var(--mono-rgb-0),0.75);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);border:1px solid rgba(255,255,255,0.12);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;padding:16px 20px;min-width:360px;min-height:200px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;`;
     // 恢复保存的大小
-    if (this.settings.popupSize) {
+    if (!isMobile && this.settings.popupSize) {
       popup.style.width = this.settings.popupSize.width + 'px';
       popup.style.height = this.settings.popupSize.height + 'px';
     }
-    // 用整数像素居中，避免 transform 亚像素导致模糊
-    if (restoreLeft && restoreTop) {
+    if (!isMobile && restoreLeft && restoreTop) {
       popup.style.left = restoreLeft;
       popup.style.top = restoreTop;
-    } else if (this.settings.popupPosition) {
+    } else if (!isMobile && this.settings.popupPosition) {
       popup.style.left = this.settings.popupPosition.left;
       popup.style.top = this.settings.popupPosition.top;
     } else {
@@ -2304,6 +2371,16 @@ class SwiftSwitchPlugin extends Plugin {
      versionTag.textContent = 'v' + (this.manifest?.version || '');
     versionTag.style.cssText = 'font-size:10px;color:var(--text-faint);margin-left:2px;align-self:flex-end;margin-bottom:2px;';
 
+    if (isMobile) {
+      const modeSwitch = leftHeader.createEl('span');
+      const isDark = document.body.classList.contains('theme-dark');
+      modeSwitch.textContent = isDark ? t('mode.dark') : t('mode.light');
+      modeSwitch.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:10px;cursor:pointer;user-select:none;border:1px solid var(--interactive-accent);background:var(--interactive-accent);color:#fff;margin-left:8px;';
+      modeSwitch.addEventListener('click', async () => {
+        await this.toggleMode();
+        modeSwitch.textContent = document.body.classList.contains('theme-dark') ? t('mode.dark') : t('mode.light');
+      });
+    }
 
     const closeBtn = header.createEl('span');
     closeBtn.textContent = '✕';
@@ -2345,6 +2422,7 @@ class SwiftSwitchPlugin extends Plugin {
     // ── 主题区域 ──────────────────────────────────────────────────────
     const themeArea = popup.createDiv();
     themeArea.style.cssText = 'margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--background-modifier-border);';
+    if (isMobile) themeArea.style.display = 'none';
 
     const renderThemes = async () => {
       themeArea.empty();
@@ -2684,8 +2762,9 @@ class SwiftSwitchPlugin extends Plugin {
       });
       helpEl.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (isMobile) { new Notice('pic: .obsidian/plugins/SwiftSnippets/pic/'); return; }
         try {
-          const picDir = nodePath.join(this._getPluginDir(), 'pic');
+          const picDir = _joinPath(this._getPluginDir(), 'pic');
           if (!nodeFs.existsSync(picDir)) {
             nodeFs.mkdirSync(picDir, { recursive: true });
           }
@@ -2805,24 +2884,30 @@ class SwiftSwitchPlugin extends Plugin {
         let chipDataUrl = '';
         if (isPaired) {
           dotStyle = `display:inline-block;width:12px;height:12px;border-radius:50%;flex-shrink:0;animation:ss-yin-yang 3s linear infinite;background:conic-gradient(#fff 0deg 180deg,#222 180deg 360deg);position:relative;`;
-          const lightPath = nodePath.join(picDir, 'pic', img.url);
+          if (!isMobile) {
+          const lightPath = _joinPath(picDir, 'pic', img.url);
           try {
             const buf = nodeFs.readFileSync(lightPath);
-            const ext = nodePath.extname(lightPath).toLowerCase();
+            const ext = lightPath.substring(lightPath.lastIndexOf('.')).toLowerCase();
             const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml' };
             const mime = mimeMap[ext] || 'image/png';
             chipDataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
           } catch (e) {}
+          }
         } else {
-          const fullPath = nodePath.join(picDir, 'pic', img.url);
+          if (!isMobile) {
+          const fullPath = _joinPath(picDir, 'pic', img.url);
           try {
             const buf = nodeFs.readFileSync(fullPath);
-            const ext = nodePath.extname(fullPath).toLowerCase();
+            const ext = fullPath.substring(fullPath.lastIndexOf('.')).toLowerCase();
             const mimeMap = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml' };
             const mime = mimeMap[ext] || 'image/png';
             chipDataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
             dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:url('${chipDataUrl}') center/cover;`;
           } catch (e) {
+            dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#6c9,#69c);`;
+          }
+          } else {
             dotStyle = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#6c9,#69c);`;
           }
         }
@@ -2907,25 +2992,40 @@ class SwiftSwitchPlugin extends Plugin {
             const newName = await this._promptGroupName(img.paired ? img.label : img.url, t('eyeCare.imgRenameTitle'));
             if (!newName) return;
             try {
+              if (isMobile) {
+                if (img.paired) {
+                  const ext = img.url.substring(img.url.lastIndexOf('.'));
+                  const picBase = '.obsidian/plugins/SwiftSnippets/pic/';
+                  try { await this.app.vault.adapter.rename(picBase + img.url, picBase + newName + '-light' + ext); } catch (_e) {}
+                  try { await this.app.vault.adapter.rename(picBase + img.urlDark, picBase + newName + '-dark' + ext); } catch (_e) {}
+                  img.url = newName + '-light' + ext;
+                  img.urlDark = newName + '-dark' + ext;
+                  img.label = newName;
+                } else {
+                  const picBase = '.obsidian/plugins/SwiftSnippets/pic/';
+                  try { await this.app.vault.adapter.rename(picBase + img.url, picBase + newName); img.url = newName; img.label = newName; } catch (_e) {}
+                }
+              } else {
               if (img.paired) {
-                const ext = nodePath.extname(img.url);
-                const oldLightPath = nodePath.join(picDir, 'pic', img.url);
-                const oldDarkPath = nodePath.join(picDir, 'pic', img.urlDark);
-                const newLightPath = nodePath.join(picDir, 'pic', newName + '-light' + ext);
-                const newDarkPath = nodePath.join(picDir, 'pic', newName + '-dark' + ext);
+                const ext = img.url.substring(img.url.lastIndexOf('.'));
+                const oldLightPath = _joinPath(picDir, 'pic', img.url);
+                const oldDarkPath = _joinPath(picDir, 'pic', img.urlDark);
+                const newLightPath = _joinPath(picDir, 'pic', newName + '-light' + ext);
+                const newDarkPath = _joinPath(picDir, 'pic', newName + '-dark' + ext);
                 if (nodeFs.existsSync(oldLightPath)) nodeFs.renameSync(oldLightPath, newLightPath);
                 if (nodeFs.existsSync(oldDarkPath)) nodeFs.renameSync(oldDarkPath, newDarkPath);
                 img.url = newName + '-light' + ext;
                 img.urlDark = newName + '-dark' + ext;
                 img.label = newName;
               } else {
-                const oldPath = nodePath.join(picDir, 'pic', img.url);
-                const newPath = nodePath.join(picDir, 'pic', newName);
+                const oldPath = _joinPath(picDir, 'pic', img.url);
+                const newPath = _joinPath(picDir, 'pic', newName);
                 if (nodeFs.existsSync(oldPath)) {
                   nodeFs.renameSync(oldPath, newPath);
                   img.url = newName;
                   img.label = newName;
                 }
+              }
               }
               await this.saveSettings();
               this.applyEyeCareColor();
@@ -2947,14 +3047,23 @@ class SwiftSwitchPlugin extends Plugin {
           });
           mkItem(t('eyeCare.imgDelete'), async () => {
             try {
+              if (isMobile) {
+                if (img.paired) {
+                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.url); } catch (_e) {}
+                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.urlDark); } catch (_e) {}
+                } else {
+                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.url); } catch (_e) {}
+                }
+              } else {
               if (img.paired) {
-                const lightPath = nodePath.join(picDir, 'pic', img.url);
-                const darkPath = nodePath.join(picDir, 'pic', img.urlDark);
+                const lightPath = _joinPath(picDir, 'pic', img.url);
+                const darkPath = _joinPath(picDir, 'pic', img.urlDark);
                 if (nodeFs.existsSync(lightPath)) nodeFs.unlinkSync(lightPath);
                 if (nodeFs.existsSync(darkPath)) nodeFs.unlinkSync(darkPath);
               } else {
-                const delPath = nodePath.join(picDir, 'pic', img.url);
+                const delPath = _joinPath(picDir, 'pic', img.url);
                 if (nodeFs.existsSync(delPath)) nodeFs.unlinkSync(delPath);
+              }
               }
               const imgs2 = this.settings.bgImages || [];
               const delIdx = imgs2.findIndex(i => i === img);
@@ -3256,7 +3365,7 @@ class SwiftSwitchPlugin extends Plugin {
 
     renderContent();
 
-    // ── 字体区域 ────────────────────────────────────────────────────────
+    // ── 字体区域（手机端隐藏） ──────────────────────────────────────────────
     const fontArea = popup.createDiv();
     fontArea.style.cssText = 'margin-top:8px;';
 
@@ -3271,7 +3380,7 @@ class SwiftSwitchPlugin extends Plugin {
     const fontLabel = fontHeader.createEl('span', { text: t('font.section') });
     fontLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);cursor:pointer;';
 
-    const fontHint = fontHeader.createEl('span', { text: t('font.clickToLoad') });
+    const fontHint = fontHeader.createEl('span', { text: isMobile ? '' : t('font.clickToLoad') });
     fontHint.style.cssText = 'font-size:10px;color:var(--text-muted);';
 
     const fontBarChip = fontHeader.createEl('span');
@@ -3315,6 +3424,7 @@ class SwiftSwitchPlugin extends Plugin {
       fontBarChip.style.background = 'var(--interactive-accent)';
       fontBarChip.style.color = '#fff';
     }
+    if (isMobile) fontBarChip.style.display = 'none';
 
     const fontToggle = fontHeader.createEl('span');
     const isFontOn = !this._fontDisabled;
@@ -3340,10 +3450,10 @@ class SwiftSwitchPlugin extends Plugin {
 
     const fontChipsContainer = fontArea.createDiv();
     fontChipsContainer.setAttribute('data-ss-font-chips', '');
-    fontChipsContainer.style.cssText = `display:${isFontCollapsed ? 'none' : 'flex'};flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;padding:4px;`;
+    fontChipsContainer.style.cssText = isMobile ? 'display:none;' : `display:${isFontCollapsed ? 'none' : 'flex'};flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;padding:4px;`;
 
     const fontSettingsPanel = fontArea.createDiv();
-    fontSettingsPanel.style.cssText = `display:${isFontCollapsed ? 'none' : 'block'};margin-top:6px;padding:8px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.3);`;
+    fontSettingsPanel.style.cssText = isMobile ? `display:block;margin-top:6px;padding:8px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.3);` : `display:${isFontCollapsed ? 'none' : 'block'};margin-top:6px;padding:8px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.3);`;
 
     let fontsLoaded = false;
 
@@ -3500,7 +3610,7 @@ class SwiftSwitchPlugin extends Plugin {
 
     const renderFontSettings = () => {
       fontSettingsPanel.innerHTML = '';
-      if (!this.settings.activeFont && !this.settings.fontColor && this.settings.fontOpacity >= 1 && !this.settings.fontLineHeight && !this.settings.fontMarginL && !this.settings.fontMarginR) {
+      if (!isMobile && !this.settings.activeFont && !this.settings.fontColor && this.settings.fontOpacity >= 1 && !this.settings.fontLineHeight && !this.settings.fontMarginL && !this.settings.fontMarginR) {
         fontSettingsPanel.style.display = 'none';
         return;
       }
@@ -3559,7 +3669,7 @@ class SwiftSwitchPlugin extends Plugin {
 
       row2.appendChild(mkLabel(t('font.marginL')));
       const mlSlider = row2.createEl('input', { type: 'range' });
-      mlSlider.min = '0'; mlSlider.max = '80'; mlSlider.value = String(this.settings.fontMarginL ?? 0);
+      mlSlider.min = '-40'; mlSlider.max = '80'; mlSlider.value = String(this.settings.fontMarginL ?? 0);
       mlSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
       const mlVal = row2.createEl('span', { text: (this.settings.fontMarginL ?? 0) + 'px' });
       mlVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
@@ -3573,7 +3683,7 @@ class SwiftSwitchPlugin extends Plugin {
 
       row2.appendChild(mkLabel(t('font.marginR')));
       const mrSlider = row2.createEl('input', { type: 'range' });
-      mrSlider.min = '0'; mrSlider.max = '80'; mrSlider.value = String(this.settings.fontMarginR ?? 0);
+      mrSlider.min = '-40'; mrSlider.max = '80'; mrSlider.value = String(this.settings.fontMarginR ?? 0);
       mrSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
       const mrVal = row2.createEl('span', { text: (this.settings.fontMarginR ?? 0) + 'px' });
       mrVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
@@ -3628,6 +3738,11 @@ class SwiftSwitchPlugin extends Plugin {
     fontCollapseIcon.addEventListener('click', () => toggleFontCollapse());
 
     fontLabel.addEventListener('click', async () => {
+      if (isMobile) {
+        const isCurrentlyVisible = fontSettingsPanel.style.display !== 'none';
+        fontSettingsPanel.style.display = isCurrentlyVisible ? 'none' : 'block';
+        return;
+      }
       if (!fontsLoaded) {
         fontHint.textContent = t('font.loading');
         const fonts = await this.getSystemFonts();
@@ -3646,6 +3761,10 @@ class SwiftSwitchPlugin extends Plugin {
       const isCurrentlyVisible = fontChipsContainer.style.display !== 'none';
       await toggleFontCollapse(isCurrentlyVisible);
     });
+
+    if (isMobile) {
+      renderFontSettings();
+    }
 
     // ── 底部：其他插件链接 ────────────────────────────────────────────
     const footer = popup.createDiv();
@@ -3714,7 +3833,7 @@ class SwiftSwitchPlugin extends Plugin {
     // ── 右下角调整大小手柄 ────────────────────────────────────────────
     const resizeHandle = document.body.createDiv();
     resizeHandle.className = 'ss-resize-handle';
-    resizeHandle.style.cssText = 'position:fixed;width:12px;height:12px;cursor:nwse-resize;z-index:10001;background:linear-gradient(135deg,transparent 50%,var(--text-muted) 50%);pointer-events:auto;border-radius:0 0 8px 0;opacity:0.5;transition:opacity 0.15s ease;';
+    resizeHandle.style.cssText = isMobile ? 'display:none;' : 'position:fixed;width:12px;height:12px;cursor:nwse-resize;z-index:10001;background:linear-gradient(135deg,transparent 50%,var(--text-muted) 50%);pointer-events:auto;border-radius:0 0 8px 0;opacity:0.5;transition:opacity 0.15s ease;';
     resizeHandle.title = _currentLang === 'zh' ? '拖拽调整大小' : 'Drag to resize';
     resizeHandle.addEventListener('mouseenter', () => { resizeHandle.style.opacity = '1'; });
     resizeHandle.addEventListener('mouseleave', () => { resizeHandle.style.opacity = '0.5'; });
@@ -4032,13 +4151,14 @@ class SwiftSwitchPlugin extends Plugin {
         this._showEditForm(document.getElementById('ss-snippets-popup'), snippetName, content, editPath, rerender);
       });
 
-      // 编辑(外部程序打开)
+      // 编辑(外部程序打开)（手机端隐藏）
+      if (!isMobile) {
       mkItem(t('context.editExternal'), async () => {
         try {
-          const snippetsDir = nodePath.join(this.app.vault.adapter.basePath, '.obsidian', 'snippets');
-          let filePath = nodePath.join(snippetsDir, snippetName + '.css');
+          const snippetsDir = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'snippets');
+          let filePath = _joinPath(snippetsDir, snippetName + '.css');
           if (!nodeFs.existsSync(filePath)) {
-            filePath = nodePath.join(snippetsDir, snippetName + '.js');
+            filePath = _joinPath(snippetsDir, snippetName + '.js');
           }
           if (nodeFs.existsSync(filePath)) {
             const { shell } = require('electron');
@@ -4048,6 +4168,7 @@ class SwiftSwitchPlugin extends Plugin {
           }
         } catch (_e) { new Notice('Open failed'); }
       });
+      }
 
       // 删除
       mkItem(t('context.delete'), async () => {
@@ -4688,7 +4809,7 @@ class SwiftSwitchPlugin extends Plugin {
 
     const renderFontSettings = () => {
       fontSettingsPanel.innerHTML = '';
-      if (!this.settings.activeFont && !this.settings.fontColor && this.settings.fontOpacity >= 1 && !this.settings.fontLineHeight && !this.settings.fontMarginL && !this.settings.fontMarginR) {
+      if (!isMobile && !this.settings.activeFont && !this.settings.fontColor && this.settings.fontOpacity >= 1 && !this.settings.fontLineHeight && !this.settings.fontMarginL && !this.settings.fontMarginR) {
         fontSettingsPanel.style.display = 'none';
         return;
       }
@@ -4747,7 +4868,7 @@ class SwiftSwitchPlugin extends Plugin {
 
       row2.appendChild(mkLabel(t('font.marginL')));
       const mlSlider = row2.createEl('input', { type: 'range' });
-      mlSlider.min = '0'; mlSlider.max = '80'; mlSlider.value = String(this.settings.fontMarginL ?? 0);
+      mlSlider.min = '-40'; mlSlider.max = '80'; mlSlider.value = String(this.settings.fontMarginL ?? 0);
       mlSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
       const mlVal = row2.createEl('span', { text: (this.settings.fontMarginL ?? 0) + 'px' });
       mlVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
@@ -4761,7 +4882,7 @@ class SwiftSwitchPlugin extends Plugin {
 
       row2.appendChild(mkLabel(t('font.marginR')));
       const mrSlider = row2.createEl('input', { type: 'range' });
-      mrSlider.min = '0'; mrSlider.max = '80'; mrSlider.value = String(this.settings.fontMarginR ?? 0);
+      mrSlider.min = '-40'; mrSlider.max = '80'; mrSlider.value = String(this.settings.fontMarginR ?? 0);
       mrSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
       const mrVal = row2.createEl('span', { text: (this.settings.fontMarginR ?? 0) + 'px' });
       mrVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
