@@ -2900,7 +2900,7 @@ class SwiftSwitchPlugin extends Plugin {
             item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);';
             item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
             item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
-            item.addEventListener('click', async () => { menu.remove(); await action(); });
+        item.addEventListener('click', async (e) => { e.stopPropagation(); menu.remove(); await action(); });
             menu.appendChild(item);
           };
           mkItem(t('eyeCare.imgRename'), async () => {
@@ -4206,6 +4206,7 @@ class SwiftSwitchPlugin extends Plugin {
 
   // ─── 编辑 Snippet 表单 ──────────────────────────────────────────────────
   _showEditForm(popup, snippetName, content, editPath, rerender) {
+    if (!popup) return;
     const existingForm = popup.querySelector('.ss-form');
     if (existingForm) existingForm.remove();
 

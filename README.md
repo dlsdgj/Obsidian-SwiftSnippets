@@ -50,6 +50,10 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 <details>
 <summary>Changelog</summary>
 
+### v1.1.5 (2026-07-01)
+
+- **Mac Edit Crash Fix** — Fixed `Cannot read properties of null` error when editing snippets via right-click menu on macOS; click event no longer bubbles to overlay and closes popup prematurely
+
 ### v1.1.4 (2026-07-01)
 
 - **Font Preload** — System font list is preloaded in background after startup; first hover on font button no longer has long delay

@@ -1,4 +1,8 @@
-## 🆕 v1.1.4 (2026-07-01)
+## 🆕 v1.1.5 (2026-07-01)
+
+- **Mac Edit Crash Fix / Mac编辑崩溃修复** — Fixed `Cannot read properties of null` error when editing snippets via right-click menu on macOS; click event no longer bubbles to overlay and closes popup prematurely / 修复 macOS 上右键菜单编辑 Snippet 时的空指针崩溃；点击事件不再冒泡到 overlay 导致 popup 提前关闭
+
+## v1.1.4 (2026-07-01)
 
 - **Font Preload / 字体预加载** — System font list is preloaded in background after startup; first hover on font button no longer has long delay / 系统字体列表在启动后后台预加载，首次悬浮字体按钮不再有长延迟
 - **Startup Speed / 启动速度** — Non-essential init tasks (pic folder scan, eye care snippet export) deferred to idle callback; no longer blocks Obsidian startup / 非必要初始化任务延迟到空闲时执行，不再阻塞 Obsidian 启动
