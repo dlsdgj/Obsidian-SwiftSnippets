@@ -3,6 +3,7 @@
 Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
 ![Demo](assets/demo.gif)
+![demo-phone](assets/demo-phone.png)
 
 ## Features
 
