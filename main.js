@@ -332,10 +332,6 @@ class SwiftSwitchPlugin extends Plugin {
     if (this.settings.floatingButton) {
       this.createFloatingButton();
     }
-    // 自动创建 pic 文件夹并扫描图片
-    this._syncPicFolder();
-    // 导出护眼色预设为 CSS snippets
-    this._exportEyeCareSnippets();
     // 恢复护眼色
     if (this.settings.eyeCareColor) {
       this.applyEyeCareColor();
@@ -348,6 +344,13 @@ class SwiftSwitchPlugin extends Plugin {
     if (this.settings.fontBarButton) {
       this._createFontBarButton();
     }
+
+    // 延迟到空闲时执行，不阻塞启动
+    requestIdleCallback(() => {
+      this._syncPicFolder();
+      this._exportEyeCareSnippets();
+      setTimeout(() => this.getSystemFonts(), 1000);
+    });
 
     // 页面风格记忆：监听活动 leaf 变化
     this._lastFilePath = this._getActiveFilePath();
@@ -369,7 +372,12 @@ class SwiftSwitchPlugin extends Plugin {
       }
     }));
 
-    // 监听深浅模式切换，自动重新应用护眼色
+    // 启动时恢复当前页面的记忆风格
+    if (this.settings.styleMemory && this._lastFilePath) {
+      this._restorePageStyle(this._lastFilePath);
+    }
+
+    // 监听深浅模式切换，自动重新应用护眼色和字体颜色
     this._modeObserver = new MutationObserver(() => {
       if (this.settings.eyeCareColor) {
         this.applyEyeCareColor();
@@ -377,11 +385,17 @@ class SwiftSwitchPlugin extends Plugin {
       if (this.settings.floatingButton) {
         this.createFloatingButton();
       }
+      if (this.settings.fontColor || this.settings.activeFont) {
+        this.applyFontSettings();
+      }
     });
     this._modeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
   }
 
   onunload() {
+    if (this.settings.styleMemory && this._lastFilePath) {
+      this._savePageStyle(this._lastFilePath);
+    }
     if (this._modeObserver) { this._modeObserver.disconnect(); this._modeObserver = null; }
     const fb = document.getElementById('ss-floating-button');
     if (fb) {
@@ -729,13 +743,20 @@ class SwiftSwitchPlugin extends Plugin {
 
     let colorRule = '';
     if (s.fontColor || s.fontOpacity < 1) {
-      if (s.fontColor && s.fontOpacity < 1) {
-        const r = parseInt(s.fontColor.slice(1,3), 16);
-        const g = parseInt(s.fontColor.slice(3,5), 16);
-        const b = parseInt(s.fontColor.slice(5,7), 16);
+      let effectiveColor = s.fontColor;
+      if (effectiveColor && document.body.classList.contains('theme-dark')) {
+        const r = parseInt(effectiveColor.slice(1,3), 16);
+        const g = parseInt(effectiveColor.slice(3,5), 16);
+        const b = parseInt(effectiveColor.slice(5,7), 16);
+        effectiveColor = '#' + (255 - r).toString(16).padStart(2, '0') + (255 - g).toString(16).padStart(2, '0') + (255 - b).toString(16).padStart(2, '0');
+      }
+      if (effectiveColor && s.fontOpacity < 1) {
+        const r = parseInt(effectiveColor.slice(1,3), 16);
+        const g = parseInt(effectiveColor.slice(3,5), 16);
+        const b = parseInt(effectiveColor.slice(5,7), 16);
         colorRule = `rgba(${r},${g},${b},${s.fontOpacity})`;
-      } else if (s.fontColor) {
-        colorRule = s.fontColor;
+      } else if (effectiveColor) {
+        colorRule = effectiveColor;
       } else {
         colorRule = `rgba(var(--text-normal-rgb, 200,200,200),${s.fontOpacity})`;
       }
@@ -795,7 +816,16 @@ class SwiftSwitchPlugin extends Plugin {
 .workspace-leaf-content[data-type="markdown"] .markdown-preview-view h3,
 .workspace-leaf-content[data-type="markdown"] .markdown-preview-view h4,
 .workspace-leaf-content[data-type="markdown"] .markdown-preview-view h5,
-.workspace-leaf-content[data-type="markdown"] .markdown-preview-view h6 {
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-view h6,
+.workspace-split .workspace-leaf-content .nav-files-container,
+.workspace-split .workspace-leaf-content .search-result-file-title,
+.workspace-split .workspace-leaf-content .search-result-file-match,
+.workspace-split .workspace-leaf-content .tree-item-inner,
+.workspace-split .workspace-leaf-content .nav-file-title,
+.workspace-split .workspace-leaf-content .nav-folder-title,
+.workspace-split .workspace-leaf-content .outline .tree-item-inner,
+.workspace-split .workspace-leaf-content .tag-container .tree-item-inner,
+.workspace-split .workspace-leaf-content .backlink-pane .tree-item-inner {
   color: ${colorRule} !important;
 }`;
     }
@@ -1304,8 +1334,8 @@ class SwiftSwitchPlugin extends Plugin {
 
     // 位置
     const pos = fb.position || { x: window.innerWidth - 80, y: 100 };
-    const safeX = Math.min(Math.max(5, pos.x), window.innerWidth - 80);
-    const safeY = Math.min(Math.max(5, pos.y), window.innerHeight - 40);
+    const safeX = Math.min(Math.max(0, pos.x), window.innerWidth - 10);
+    const safeY = Math.min(Math.max(0, pos.y), window.innerHeight - 10);
     btn.style.left = safeX + 'px';
     btn.style.top = safeY + 'px';
 
@@ -1441,11 +1471,14 @@ class SwiftSwitchPlugin extends Plugin {
           } else {
             this.settings.eyeCareColor = `__img_${nextItem.idx}`;
             this.applyEyeCareColor();
-            await this.saveSettings();
             new Notice(bgImgs[nextItem.idx].label || bgImgs[nextItem.idx].url);
           }
         } else {
           new Notice(t('eyeCare.default'));
+        }
+        await this.saveSettings();
+        if (this.settings.styleMemory && this._lastFilePath) {
+          await this._savePageStyle(this._lastFilePath);
         }
       }
     }, { passive: false });
@@ -1474,8 +1507,8 @@ class SwiftSwitchPlugin extends Plugin {
       btn.style.transition = 'none';
       let newLeft = initialLeft + (e.clientX - startX);
       let newTop = initialTop + (e.clientY - startY);
-      newLeft = Math.max(5, Math.min(newLeft, window.innerWidth - 80));
-      newTop = Math.max(5, Math.min(newTop, window.innerHeight - 40));
+      newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - btn.offsetWidth));
+      newTop = Math.max(0, Math.min(newTop, window.innerHeight - btn.offsetHeight));
       btn.style.left = newLeft + 'px';
       btn.style.top = newTop + 'px';
       positionPullCord();
@@ -2453,11 +2486,11 @@ class SwiftSwitchPlugin extends Plugin {
           modeSwitch.style.display = 'inline-flex';
         } else {
           const popupEl = document.getElementById('ss-snippets-popup');
-          let fbX = window.innerWidth - 80;
+          let fbX = window.innerWidth - 40;
           if (popupEl) {
             const rect = popupEl.getBoundingClientRect();
             fbX = rect.right + 50;
-            if (fbX > window.innerWidth - 80) fbX = window.innerWidth - 80;
+            if (fbX > window.innerWidth - 40) fbX = window.innerWidth - 40;
           }
           this.settings.floatingButton = {
             text: t('float.defaultText'),

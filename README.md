@@ -50,6 +50,16 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 <details>
 <summary>Changelog</summary>
 
+### v1.1.4 (2026-07-01)
+
+- **Font Preload** — System font list is preloaded in background after startup; first hover on font button no longer has long delay
+- **Startup Speed** — Non-essential init tasks (pic folder scan, eye care snippet export) deferred to idle callback; no longer blocks Obsidian startup
+- **Dark/Light Font Color Inversion** — Font color auto-inverts (RGB 255-x) when switching to dark mode; reverts to original in light mode
+- **Font Color for Side Panels** — Font color now also applies to side panels (file explorer, search, outline, tags, backlinks)
+- **Style Memory Fix** — Scroll-wheel background changes on floating button now properly saved to page style memory; no longer lost on restart
+- **Startup Memory Restore** — Current page's remembered style is now restored on plugin startup, not only on tab switch
+- **Floating Button Edge** — Dragging floating button to right/bottom edge no longer blocked by hardcoded 80px/40px margin
+
 ### v1.1.3 (2026-06-26)
 
 - **Font Memory** — Style memory mode now also remembers font settings (active font, enable/disable, color, opacity, line height, margins)

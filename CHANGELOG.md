@@ -1,4 +1,14 @@
-## 🆕 v1.1.3 (2026-06-26)
+## 🆕 v1.1.4 (2026-07-01)
+
+- **Font Preload / 字体预加载** — System font list is preloaded in background after startup; first hover on font button no longer has long delay / 系统字体列表在启动后后台预加载，首次悬浮字体按钮不再有长延迟
+- **Startup Speed / 启动速度** — Non-essential init tasks (pic folder scan, eye care snippet export) deferred to idle callback; no longer blocks Obsidian startup / 非必要初始化任务延迟到空闲时执行，不再阻塞 Obsidian 启动
+- **Dark/Light Font Color Inversion / 深浅模式字体颜色反色** — Font color auto-inverts (RGB 255-x) when switching to dark mode; reverts to original in light mode / 切换到深色模式时字体颜色自动取反（RGB 255-x），浅色模式恢复原色
+- **Font Color for Side Panels / 字体颜色应用到侧面板** — Font color now also applies to side panels (file explorer, search, outline, tags, backlinks) / 字体颜色同时应用到左右侧面板（文件树、搜索、大纲、标签、反向链接）
+- **Style Memory Fix / 记忆模式修复** — Scroll-wheel background changes on floating button now properly saved to page style memory; no longer lost on restart / 悬浮按钮滚轮切换背景现在正确保存到页面风格记忆，重启后不再丢失
+- **Startup Memory Restore / 启动时恢复记忆** — Current page's remembered style is now restored on plugin startup, not only on tab switch / 当前页面的记忆风格在插件启动时即恢复，而非仅切换标签页时
+- **Floating Button Edge / 悬浮按钮边缘** — Dragging floating button to right/bottom edge no longer blocked by hardcoded 80px/40px margin / 拖拽悬浮按钮到右/下边缘不再被硬编码的 80px/40px 边距阻挡
+
+## v1.1.3 (2026-06-26)
 
 - **Font Memory / 字体记忆** — Style memory mode now also remembers font settings (active font, enable/disable, color, opacity, line height, margins) / 记忆模式现在同时记忆字体设置（活动字体、启用/禁用、颜色、透明度、行间距、边距）
 - **Font Toggle Reversed / 字体按钮逆转** — Font enable/disable button now shows the opposite action: "Disable" when enabled, "Enable" when disabled / 字体启用/禁用按钮显示相反操作：启用时显示"禁用"，禁用时显示"启用"
