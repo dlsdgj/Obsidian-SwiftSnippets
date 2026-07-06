@@ -1,4 +1,4 @@
-const { Plugin, Notice, Platform } = require('obsidian');
+﻿const { Plugin, Notice, Platform } = require('obsidian');
 const isMobile = Platform.isMobile;
 const nodePath = isMobile ? null : require('path');
 const nodeFs = isMobile ? null : require('fs');
@@ -49,6 +49,19 @@ const i18n = {
     'theme.switchFailed': '切换主题失败',
     'theme.restartRequired': '需要重启生效',
     'theme.default': '默认',
+    'theme.delete': '删除主题',
+    'theme.deleteConfirm': '确定删除主题「{0}」？',
+    'theme.deleted': '主题已删除',
+    'theme.deleteFailed': '删除主题失败',
+    'theme.activeDeleteHint': '当前正在使用此主题，删除后将切换为默认主题',
+    'theme.setAsDefault': '设为新页面默认',
+    'theme.setAsDefaultDone': '已设为新页面默认主题',
+    'theme.clearDefault': '取消新页面默认主题',
+    'theme.clearDefaultDone': '已取消新页面默认主题',
+    'eyeCare.setAsDefault': '设为新页面默认',
+    'eyeCare.setAsDefaultDone': '已设为新页面默认背景',
+    'eyeCare.clearDefault': '取消新页面默认背景',
+    'eyeCare.clearDefaultDone': '已取消新页面默认背景',
     'float.edit': '编辑',
     'float.editTitle': '编辑悬浮按钮',
     'float.editText': '按钮文字',
@@ -110,6 +123,15 @@ const i18n = {
     'eyeCare.imgDeleted': '图片已删除',
     'eyeCare.imgRenameFailed': '重命名失败',
     'eyeCare.imgRotateFailed': '旋转失败',
+    'eyeCare.addColor': '添加',
+    'eyeCare.addColorTitle': '添加背景色',
+    'eyeCare.addColorPlaceholder': '输入颜色值(如 #ff6600)',
+    'eyeCare.addColorDone': '背景色已添加',
+    'eyeCare.addColorInvalid': '无效的颜色值',
+    'theme.defaultMode': '新页面默认为:深/浅',
+    'eyeCare.defaultMode': '新页面默认为:深/浅',
+    'settings.title': '设置',
+    'settings.autoBgByName': '打开文档时使用同名图片作背景',
     'styleMemory.chip': '记忆模式',
     'styleMemory.hint': '记忆模式：记住每个页面的风格，切换时自动恢复',
     'styleMemory.on': '记忆模式已开启',
@@ -182,6 +204,19 @@ const i18n = {
     'theme.switchFailed': 'Failed to switch theme',
     'theme.restartRequired': 'Restart required',
     'theme.default': 'Default',
+    'theme.delete': 'Delete Theme',
+    'theme.deleteConfirm': 'Delete theme "{0}"?',
+    'theme.deleted': 'Theme deleted',
+    'theme.deleteFailed': 'Failed to delete theme',
+    'theme.activeDeleteHint': 'This theme is currently active. It will switch to default after deletion.',
+    'theme.setAsDefault': 'Set as default for new pages',
+    'theme.setAsDefaultDone': 'Set as default theme for new pages',
+    'theme.clearDefault': 'Clear default theme for new pages',
+    'theme.clearDefaultDone': 'Cleared default theme for new pages',
+    'eyeCare.setAsDefault': 'Set as default for new pages',
+    'eyeCare.setAsDefaultDone': 'Set as default background for new pages',
+    'eyeCare.clearDefault': 'Clear default background for new pages',
+    'eyeCare.clearDefaultDone': 'Cleared default background for new pages',
     'float.edit': 'Edit',
     'float.editTitle': 'Edit Floating Button',
     'float.editText': 'Button Text',
@@ -243,6 +278,15 @@ const i18n = {
     'eyeCare.imgDeleted': 'Image deleted',
     'eyeCare.imgRenameFailed': 'Rename failed',
     'eyeCare.imgRotateFailed': 'Rotate failed',
+    'eyeCare.addColor': 'Add',
+    'eyeCare.addColorTitle': 'Add Background Color',
+    'eyeCare.addColorPlaceholder': 'Enter color (e.g. #ff6600)',
+    'eyeCare.addColorDone': 'Background color added',
+    'eyeCare.addColorInvalid': 'Invalid color value',
+    'theme.defaultMode': 'Default mode for new pages: dark/light',
+    'eyeCare.defaultMode': 'Default mode for new pages: dark/light',
+    'settings.title': 'Settings',
+    'settings.autoBgByName': 'Use same-name image as background on document open',
     'styleMemory.chip': 'Memory Mode',
     'styleMemory.hint': 'Memory mode: remember each page style, auto-restore on switch',
     'styleMemory.on': 'Memory mode on',
@@ -376,6 +420,9 @@ class SwiftSwitchPlugin extends Plugin {
         if (oldPath) await this._savePageStyle(oldPath);
         if (newPath) await this._restorePageStyle(newPath);
       }
+      if (this.settings.autoBgByName && newPath) {
+        await this._applyAutoBgByName(newPath);
+      }
       const popup = document.getElementById('ss-snippets-popup');
       if (popup && popup._ssRenderContent) {
         await new Promise(r => setTimeout(r, 200));
@@ -387,6 +434,9 @@ class SwiftSwitchPlugin extends Plugin {
     // 启动时恢复当前页面的记忆风格
     if (this.settings.styleMemory && this._lastFilePath) {
       this._restorePageStyle(this._lastFilePath);
+    }
+    if (this.settings.autoBgByName && this._lastFilePath) {
+      this._applyAutoBgByName(this._lastFilePath);
     }
 
     // 监听深浅模式切换，自动重新应用护眼色和字体颜色
@@ -443,6 +493,7 @@ class SwiftSwitchPlugin extends Plugin {
       statusBarButton: null, // { text, css } or null
       eyeCareColor: '',     // preset key: '' | 'cream' | 'green' | 'yellow' | 'mint' | 'beige' | 'sepia' | '__img_0' | '__img_1' ...
       bgImages: [],         // [{ type: 'local', url: '...', label: '...', opacity: 0.3 }, ...]
+      customBgColors: [],   // ['#ff6600', ...] 用户自定义背景色
       popupPosition: null,  // { left, top } or null
       popupSize: null,      // { width, height } or null
       styleMemory: false,   // 记忆模式开关
@@ -458,6 +509,11 @@ class SwiftSwitchPlugin extends Plugin {
       fontMarginR: 0,            // 右边距 px 0=默认
       fontCollapsed: false,      // 字体区域是否折叠
       fontBarButton: null,       // { text, css } or null — 状态栏字体按钮
+      defaultTheme: '',          // 新页面默认主题（空=使用当前主题）
+      defaultEyeCareColor: '',   // 新页面默认背景（空=使用当前背景）
+      defaultThemeMode: '',      // 新页面默认深浅模式（空=不切换, 'dark'=深色, 'light'=浅色）
+      defaultEyeCareMode: '',    // 新页面默认背景深浅模式（空=不切换, 'dark'=深色, 'light'=浅色）
+      autoBgByName: false,       // 打开文档时使用同名图片作背景
     }, data);
   }
 
@@ -607,8 +663,52 @@ class SwiftSwitchPlugin extends Plugin {
       this._stopCursorTracking();
       return;
     }
-    if (!key.startsWith('__img_')) {
+    if (!key.startsWith('__img_') && !key.startsWith('__customcolor_')) {
       this._removeOverlay('ss-bg-img-overlay');
+    }
+    if (key.startsWith('__customcolor_')) {
+      const cIdx = parseInt(key.slice(14), 10);
+      const customColors = this.settings.customBgColors || [];
+      const colorVal = customColors[cIdx];
+      if (!colorVal) { styleEl.textContent = ''; this._removeOverlay('ss-bg-img-overlay'); return; }
+      this._removeOverlay('ss-bg-img-overlay');
+      this._removeOverlay('ss-edge-glow-overlay');
+      this._removeOverlay('ss-cursor-glow-overlay');
+      this._stopCursorTracking();
+      const isDark = document.body.classList.contains('theme-dark');
+      let r = parseInt(colorVal.slice(1,3), 16);
+      let g = parseInt(colorVal.slice(3,5), 16);
+      let b = parseInt(colorVal.slice(5,7), 16);
+      if (isDark) {
+        r = 255 - r; g = 255 - g; b = 255 - b;
+      }
+      const effectiveColor = `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+      const bgSec = isDark
+        ? `rgba(${Math.round(r*0.85)},${Math.round(g*0.85)},${Math.round(b*0.85)},1)`
+        : `rgba(${Math.min(255,Math.round(r*1.02))},${Math.min(255,Math.round(g*1.02))},${Math.min(255,Math.round(b*1.02))},1)`;
+      const bgMod = isDark
+        ? `rgba(${Math.round(r*0.7)},${Math.round(g*0.7)},${Math.round(b*0.7)},0.15)`
+        : `rgba(${Math.round(r*0.8)},${Math.round(g*0.8)},${Math.round(b*0.8)},0.12)`;
+      styleEl.textContent = `
+        .workspace-leaf-content,
+        .markdown-source-view,
+        .markdown-preview-view {
+          --background-primary: ${effectiveColor};
+          --background-primary-alt: ${effectiveColor};
+          --background-secondary: ${bgSec};
+          --background-secondary-alt: ${bgSec};
+          --background-modifier-border: ${bgMod};
+          background: ${effectiveColor};
+        }
+        .markdown-source-view .cm-s-obsidian,
+        .markdown-preview-view .markdown-reading-view {
+          background: transparent;
+        }
+        .markdown-source-view.mod-cm6 .cm-line {
+          background: transparent !important;
+        }
+      `;
+      return;
     }
     if (key.startsWith('__img_')) {
       const imgIdx = parseInt(key.slice(6), 10);
@@ -767,7 +867,11 @@ class SwiftSwitchPlugin extends Plugin {
   applyFontSettings() {
     let styleEl = document.getElementById('ss-font-style');
     const s = this.settings;
-    if (this._fontDisabled || (!s.activeFont && !s.fontColor && s.fontOpacity >= 1 && !s.fontLineHeight && !mlActive && !mrActive)) {
+    const mlActive = (s.fontMarginL ?? 0) !== 0;
+    const mrActive = (s.fontMarginR ?? 0) !== 0;
+    const hasStyleSettings = s.fontColor || s.fontOpacity < 1 || s.fontLineHeight || mlActive || mrActive;
+    const hasFontSetting = s.activeFont && !this._fontDisabled;
+    if (!hasFontSetting && !hasStyleSettings) {
       if (styleEl) styleEl.remove();
       return;
     }
@@ -777,12 +881,11 @@ class SwiftSwitchPlugin extends Plugin {
       document.head.appendChild(styleEl);
     }
 
-    const ff = s.activeFont || '';
+    const ff = hasFontSetting ? (s.activeFont || '') : '';
     const lh = s.fontLineHeight > 0 ? s.fontLineHeight : '';
     const ml = s.fontMarginL ?? 0;
     const mr = s.fontMarginR ?? 0;
-    const mlActive = ml !== 0;
-    const mrActive = mr !== 0;
+
 
     let colorRule = '';
     if (s.fontColor || s.fontOpacity < 1) {
@@ -1319,10 +1422,18 @@ class SwiftSwitchPlugin extends Plugin {
         imgItem: img,
       });
     });
+    const customColors = this.settings.customBgColors || [];
+    customColors.forEach((colorVal, cIdx) => {
+      base.push({
+        key: `__customcolor_${cIdx}`,
+        color: colorVal, darkColor: colorVal,
+        label: colorVal,
+        pattern: 'customcolor',
+      });
+    });
     return base;
   }
 
-  // ─── 悬浮按钮 ────────────────────────────────────────────────────────
   createFloatingButton() {
     const existing = document.getElementById('ss-floating-button');
     if (existing) {
@@ -1508,30 +1619,35 @@ class SwiftSwitchPlugin extends Plugin {
         const bgGroupName = '__bg__';
         const bgMembers = this.settings.groups[bgGroupName] || [];
         const bgImgs = this.settings.bgImages || [];
-        if (bgMembers.length === 0 && bgImgs.length === 0) return;
+        const bgCustomColors = this.settings.customBgColors || [];
+        if (bgMembers.length === 0 && bgImgs.length === 0 && bgCustomColors.length === 0) return;
         const { enabledSnippets } = await this.getSnippetInfo();
         const enabledBg = bgMembers.filter(n => enabledSnippets.includes(n));
         const currentIdx = bgMembers.indexOf(enabledBg[enabledBg.length - 1] || '');
         const currentImgIdx = this.settings.eyeCareColor?.startsWith('__img_') ? parseInt(this.settings.eyeCareColor.slice(6), 10) : -1;
+        const currentColorIdx = this.settings.eyeCareColor?.startsWith('__customcolor_') ? parseInt(this.settings.eyeCareColor.slice(14), 10) : -1;
         const items = [];
         bgMembers.forEach((name, i) => items.push({ type: 'snippet', name, idx: i }));
         bgImgs.forEach((_, i) => items.push({ type: 'img', idx: i }));
+        bgCustomColors.forEach((_, i) => items.push({ type: 'customcolor', idx: i }));
         let activeItemIdx = -1;
-        if (currentImgIdx >= 0) {
+        if (currentColorIdx >= 0) {
+          activeItemIdx = items.findIndex(it => it.type === 'customcolor' && it.idx === currentColorIdx);
+        } else if (currentImgIdx >= 0) {
           activeItemIdx = items.findIndex(it => it.type === 'img' && it.idx === currentImgIdx);
         } else if (currentIdx >= 0) {
           activeItemIdx = items.findIndex(it => it.type === 'snippet' && it.idx === currentIdx);
         }
         let nextItemIdx;
         if (e.deltaY > 0) {
-          nextItemIdx = activeItemIdx < items.length - 1 ? activeItemIdx + 1 : -1;
+          nextItemIdx = activeItemIdx < 0 ? 0 : (activeItemIdx < items.length - 1 ? activeItemIdx + 1 : 0);
         } else {
-          nextItemIdx = activeItemIdx > 0 ? activeItemIdx - 1 : -1;
+          nextItemIdx = activeItemIdx < 0 ? items.length - 1 : (activeItemIdx > 0 ? activeItemIdx - 1 : items.length - 1);
         }
         for (const name of enabledBg) {
           this._setSnippetEnabled(name, false);
         }
-        if (this.settings.eyeCareColor?.startsWith('__img_')) {
+        if (this.settings.eyeCareColor?.startsWith('__img_') || this.settings.eyeCareColor?.startsWith('__customcolor_')) {
           this.settings.eyeCareColor = '';
           this.applyEyeCareColor();
         }
@@ -1540,10 +1656,14 @@ class SwiftSwitchPlugin extends Plugin {
           if (nextItem.type === 'snippet') {
             this._setSnippetEnabled(nextItem.name, true);
             new Notice(nextItem.name);
-          } else {
+          } else if (nextItem.type === 'img') {
             this.settings.eyeCareColor = `__img_${nextItem.idx}`;
             this.applyEyeCareColor();
             new Notice(bgImgs[nextItem.idx].label || bgImgs[nextItem.idx].url);
+          } else if (nextItem.type === 'customcolor') {
+            this.settings.eyeCareColor = `__customcolor_${nextItem.idx}`;
+            this.applyEyeCareColor();
+            new Notice(bgCustomColors[nextItem.idx]);
           }
         } else {
           new Notice(t('eyeCare.default'));
@@ -2149,7 +2269,39 @@ class SwiftSwitchPlugin extends Plugin {
     if (!filePath || !this.settings.styleMemory) return;
     const profile = this.settings.pageStyles[filePath];
 
-    if (!profile) return;
+    if (!profile) {
+      const hasDefault = this.settings.defaultTheme || this.settings.defaultEyeCareColor || this.settings.defaultThemeMode || this.settings.defaultEyeCareMode;
+      if (!hasDefault) return;
+      try {
+        if (this.settings.defaultThemeMode) {
+          const currentIsDark = document.body.classList.contains('theme-dark');
+          const wantDark = this.settings.defaultThemeMode === 'dark';
+          if (currentIsDark !== wantDark) await this.toggleMode(true);
+        }
+        if (this.settings.defaultTheme) {
+          await this.switchTheme(this.settings.defaultTheme, true);
+        }
+        if (this.settings.defaultEyeCareMode && !this.settings.defaultThemeMode) {
+          const currentIsDark = document.body.classList.contains('theme-dark');
+          const wantDark = this.settings.defaultEyeCareMode === 'dark';
+          if (currentIsDark !== wantDark) await this.toggleMode(true);
+        }
+        if (this.settings.defaultEyeCareColor) {
+          const dec = this.settings.defaultEyeCareColor;
+          if (dec.startsWith('__snippet__')) {
+            const snippetName = dec.slice('__snippet__'.length);
+            this._setSnippetEnabled(snippetName, true);
+            this.settings.eyeCareColor = '';
+            this.applyEyeCareColor();
+          } else {
+            this.settings.eyeCareColor = dec;
+            this.applyEyeCareColor();
+          }
+          await this.saveSettings();
+        }
+      } catch (_e) {}
+      return;
+    }
     try {
       if (profile.theme !== undefined) {
         await this.switchTheme(profile.theme, true);
@@ -2197,6 +2349,24 @@ class SwiftSwitchPlugin extends Plugin {
       this.applyFontSettings();
       await this.saveSettings();
     } catch (_e) {
+    }
+  }
+
+  async _applyAutoBgByName(filePath) {
+    if (!this.settings.autoBgByName || !filePath) return;
+    const fileName = filePath.replace(/^.*[\/\\]/, '').replace(/\.[^.]+$/, '');
+    if (!fileName) return;
+    const imgs = this.settings.bgImages || [];
+    const matchedIdx = imgs.findIndex(img => {
+      const imgLabel = (img.label || img.url || '').replace(/\.[^.]+$/, '');
+      return imgLabel === fileName;
+    });
+    if (matchedIdx >= 0) {
+      this.settings.eyeCareColor = `__img_${matchedIdx}`;
+      const bgMembers = this.settings.groups['__bg__'] || [];
+      for (const name of bgMembers) { this._setSnippetEnabled(name, false); }
+      this.applyEyeCareColor();
+      await this.saveSettings();
     }
   }
 
@@ -2306,8 +2476,8 @@ class SwiftSwitchPlugin extends Plugin {
     const popup = document.createElement('div');
     popup.id = 'ss-snippets-popup';
     popup.style.cssText = isMobile
-      ? `position:fixed;background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--background-modifier-border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:10000;padding:12px 14px;width:92vw;max-width:92vw;max-height:85vh;overflow-y:auto;overflow-x:hidden;`
-      : `position:fixed;background:rgba(var(--mono-rgb-0),0.75);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);border:1px solid rgba(255,255,255,0.12);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;padding:16px 20px;min-width:360px;min-height:200px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;`;
+      ? `position:fixed;background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--background-modifier-border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:10000;padding:12px 14px;width:92vw;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;`
+      : `position:fixed;background:rgba(var(--mono-rgb-0),0.75);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);border:1px solid rgba(255,255,255,0.12);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;padding:16px 20px;min-width:360px;min-height:200px;width:480px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;`;
     // 恢复保存的大小
     if (!isMobile && this.settings.popupSize) {
       popup.style.width = this.settings.popupSize.width + 'px';
@@ -2327,8 +2497,11 @@ class SwiftSwitchPlugin extends Plugin {
       });
     }
 
+    const scrollBody = popup.createDiv();
+    scrollBody.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;';
+
     // ── 头部 ──────────────────────────────────────────────────────────
-    const header = popup.createDiv();
+    const header = scrollBody.createDiv();
     header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:0;cursor:move;';
 
     const leftHeader = header.createDiv();
@@ -2420,7 +2593,7 @@ class SwiftSwitchPlugin extends Plugin {
     });
 
     // ── 主题区域 ──────────────────────────────────────────────────────
-    const themeArea = popup.createDiv();
+    const themeArea = scrollBody.createDiv();
     themeArea.style.cssText = 'margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--background-modifier-border);';
     if (isMobile) themeArea.style.display = 'none';
 
@@ -2626,6 +2799,64 @@ class SwiftSwitchPlugin extends Plugin {
         applyThemeChipStyle(defaultChip, true);
         themeChipEls.forEach(({ el, name }) => applyThemeChipStyle(el, false));
       });
+      defaultChip.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        defaultPreviewing = false;
+        const menu = document.createElement('div');
+        menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--background-modifier-border);border-radius:6px;padding:4px 0;z-index:10001;box-shadow:0 4px 16px rgba(0,0,0,0.25);min-width:120px;`;
+        const mkItem = (label, action) => {
+          const item = document.createElement('div');
+          item.textContent = label;
+          item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);';
+          item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
+          item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+          item.addEventListener('click', async (ev) => { ev.stopPropagation(); menu.remove(); await action(); });
+          menu.appendChild(item);
+        };
+        mkItem(t('theme.setAsDefault'), async () => {
+          this.settings.defaultTheme = '';
+          await this.saveSettings();
+          new Notice(t('theme.setAsDefaultDone'));
+        });
+        if (this.settings.defaultTheme !== '') {
+          mkItem(t('theme.clearDefault'), async () => {
+            this.settings.defaultTheme = '';
+            await this.saveSettings();
+            new Notice(t('theme.clearDefaultDone'));
+          });
+        }
+        const mkToggle = (label, isOn, action) => {
+          const item = document.createElement('div');
+          item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);display:flex;align-items:center;justify-content:space-between;gap:12px;';
+          const labelEl = document.createElement('span');
+          labelEl.textContent = label;
+          const toggle = document.createElement('span');
+          toggle.style.cssText = `display:inline-block;width:28px;height:16px;border-radius:8px;position:relative;transition:background 0.15s ease;background:${isOn ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};flex-shrink:0;`;
+          const knob = document.createElement('span');
+          knob.style.cssText = `position:absolute;top:2px;left:${isOn ? '14px' : '2px'};width:12px;height:12px;border-radius:50%;background:#fff;transition:left 0.15s ease;`;
+          toggle.appendChild(knob);
+          item.appendChild(labelEl);
+          item.appendChild(toggle);
+          item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
+          item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+          item.addEventListener('click', async (ev) => { ev.stopPropagation(); menu.remove(); await action(); });
+          menu.appendChild(item);
+        };
+        mkToggle(t('theme.defaultMode'), !!this.settings.defaultThemeMode, async () => {
+          if (this.settings.defaultThemeMode) {
+            this.settings.defaultThemeMode = '';
+          } else {
+            this.settings.defaultThemeMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+          }
+          await this.saveSettings();
+        });
+        document.body.appendChild(menu);
+        const closeMenu = (ev) => {
+          if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', closeMenu); }
+        };
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
+      });
 
       const themeChipEls = [];
       themeDirs.forEach(themeName => {
@@ -2659,6 +2890,89 @@ class SwiftSwitchPlugin extends Plugin {
           await this.switchTheme(themeName);
           applyThemeChipStyle(defaultChip, false);
           themeChipEls.forEach(({ el, name }) => applyThemeChipStyle(el, name === themeName));
+        });
+        chip.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          themePreviewing = false;
+          const menu = document.createElement('div');
+          menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--background-modifier-border);border-radius:6px;padding:4px 0;z-index:10001;box-shadow:0 4px 16px rgba(0,0,0,0.25);min-width:120px;`;
+          const mkItem = (label, action) => {
+            const item = document.createElement('div');
+            item.textContent = label;
+            item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);';
+            item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
+            item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+            item.addEventListener('click', async (ev) => { ev.stopPropagation(); menu.remove(); await action(); });
+            menu.appendChild(item);
+          };
+          mkItem(t('theme.setAsDefault'), async () => {
+            this.settings.defaultTheme = themeName;
+            await this.saveSettings();
+            new Notice(t('theme.setAsDefaultDone'));
+            await renderThemes();
+          });
+          if (this.settings.defaultTheme === themeName) {
+            mkItem(t('theme.clearDefault'), async () => {
+              this.settings.defaultTheme = '';
+              await this.saveSettings();
+              new Notice(t('theme.clearDefaultDone'));
+              await renderThemes();
+            });
+          }
+          const mkToggle = (label, isOn, action) => {
+            const item = document.createElement('div');
+            item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);display:flex;align-items:center;justify-content:space-between;gap:12px;';
+            const labelEl = document.createElement('span');
+            labelEl.textContent = label;
+            const toggle = document.createElement('span');
+            toggle.style.cssText = `display:inline-block;width:28px;height:16px;border-radius:8px;position:relative;transition:background 0.15s ease;background:${isOn ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};flex-shrink:0;`;
+            const knob = document.createElement('span');
+            knob.style.cssText = `position:absolute;top:2px;left:${isOn ? '14px' : '2px'};width:12px;height:12px;border-radius:50%;background:#fff;transition:left 0.15s ease;`;
+            toggle.appendChild(knob);
+            item.appendChild(labelEl);
+            item.appendChild(toggle);
+            item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
+            item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+            item.addEventListener('click', async (ev) => { ev.stopPropagation(); menu.remove(); await action(); });
+            menu.appendChild(item);
+          };
+          mkToggle(t('theme.defaultMode'), !!this.settings.defaultThemeMode, async () => {
+            if (this.settings.defaultThemeMode) {
+              this.settings.defaultThemeMode = '';
+            } else {
+              this.settings.defaultThemeMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+            }
+            await this.saveSettings();
+          });
+          mkItem(t('theme.delete'), async () => {
+            const confirmMsg = t('theme.deleteConfirm').replace('{0}', themeName);
+            if (isActive) {
+              const hint = t('theme.activeDeleteHint');
+              if (!confirm(confirmMsg + '\n' + hint)) return;
+              await this.switchTheme('');
+              currentTheme = '';
+            } else {
+              if (!confirm(confirmMsg)) return;
+            }
+            try {
+              if (isMobile) {
+                await this.app.vault.adapter.rmdir('.obsidian/themes/' + themeName, true);
+              } else {
+                const themePath = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'themes', themeName);
+                nodeFs.rmSync(themePath, { recursive: true, force: true });
+              }
+              new Notice(t('theme.deleted'));
+              await renderThemes();
+            } catch (_e) {
+              new Notice(t('theme.deleteFailed'));
+            }
+          });
+          document.body.appendChild(menu);
+          const closeMenu = (ev) => {
+            if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', closeMenu); }
+          };
+          setTimeout(() => document.addEventListener('click', closeMenu), 0);
         });
       });
 
@@ -2727,7 +3041,7 @@ class SwiftSwitchPlugin extends Plugin {
     renderThemes();
 
     // ── 背景分组 ──────────────────────────────────────────────────
-    const eyeCareArea = popup.createDiv();
+    const eyeCareArea = scrollBody.createDiv();
     eyeCareArea.style.cssText = 'margin-bottom:12px;';
 
     const BG_GROUP_KEY = '__bg__';
@@ -3045,6 +3359,45 @@ class SwiftSwitchPlugin extends Plugin {
               new Notice(t('eyeCare.imgRotated'));
             } catch (_e) { new Notice(t('eyeCare.imgRotateFailed')); }
           });
+          mkItem(t('eyeCare.setAsDefault'), async () => {
+            this.settings.defaultEyeCareColor = `__img_${idx}`;
+            await this.saveSettings();
+            new Notice(t('eyeCare.setAsDefaultDone'));
+            renderEyeCare();
+          });
+          if (this.settings.defaultEyeCareColor === `__img_${idx}`) {
+            mkItem(t('eyeCare.clearDefault'), async () => {
+              this.settings.defaultEyeCareColor = '';
+              await this.saveSettings();
+              new Notice(t('eyeCare.clearDefaultDone'));
+              renderEyeCare();
+            });
+          }
+          const mkToggle = (label, isOn, action) => {
+            const item = document.createElement('div');
+            item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);display:flex;align-items:center;justify-content:space-between;gap:12px;';
+            const labelEl = document.createElement('span');
+            labelEl.textContent = label;
+            const toggle = document.createElement('span');
+            toggle.style.cssText = `display:inline-block;width:28px;height:16px;border-radius:8px;position:relative;transition:background 0.15s ease;background:${isOn ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};flex-shrink:0;`;
+            const knob = document.createElement('span');
+            knob.style.cssText = `position:absolute;top:2px;left:${isOn ? '14px' : '2px'};width:12px;height:12px;border-radius:50%;background:#fff;transition:left 0.15s ease;`;
+            toggle.appendChild(knob);
+            item.appendChild(labelEl);
+            item.appendChild(toggle);
+            item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
+            item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+            item.addEventListener('click', async (ev) => { ev.stopPropagation(); menu.remove(); await action(); });
+            menu.appendChild(item);
+          };
+          mkToggle(t('eyeCare.defaultMode'), !!this.settings.defaultEyeCareMode, async () => {
+            if (this.settings.defaultEyeCareMode) {
+              this.settings.defaultEyeCareMode = '';
+            } else {
+              this.settings.defaultEyeCareMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+            }
+            await this.saveSettings();
+          });
           mkItem(t('eyeCare.imgDelete'), async () => {
             try {
               if (isMobile) {
@@ -3086,6 +3439,160 @@ class SwiftSwitchPlugin extends Plugin {
         });
       });
 
+      const customColors = this.settings.customBgColors || [];
+      customColors.forEach((colorVal, cIdx) => {
+        const isActive = this.settings.eyeCareColor === `__customcolor_${cIdx}`;
+        const chip = chipsContainer.createDiv();
+        chip.style.cssText = `display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid ${isActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};background:${isActive ? 'var(--interactive-accent)' : 'var(--background-primary)'};color:${isActive ? '#fff' : 'var(--text-normal)'};transition:border-color 0.15s,background 0.15s,color 0.15s;`;
+        const dot = chip.createEl('span');
+        dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${colorVal};`;
+        const nameEl = chip.createEl('span', { text: colorVal });
+        nameEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        const applyChipStyle = (active) => {
+          chip.style.borderColor = active ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+          chip.style.background = active ? 'var(--interactive-accent)' : 'var(--background-primary)';
+          chip.style.color = active ? '#fff' : 'var(--text-normal)';
+        };
+        chip.addEventListener('click', async () => {
+          if (this.settings.eyeCareColor === `__customcolor_${cIdx}`) {
+            this.settings.eyeCareColor = '';
+          } else {
+            this.settings.eyeCareColor = `__customcolor_${cIdx}`;
+            for (const name of bgMembers) { this._setSnippetEnabled(name, false); }
+          }
+          this.applyEyeCareColor();
+          await this.saveSettings();
+          renderEyeCare();
+          renderContent();
+        });
+        chip.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const menu = document.createElement('div');
+          menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--background-modifier-border);border-radius:6px;padding:4px 0;z-index:10001;box-shadow:0 4px 16px rgba(0,0,0,0.25);min-width:120px;`;
+          const mkItem = (label, action) => {
+            const item = document.createElement('div');
+            item.textContent = label;
+            item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);';
+            item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
+            item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+            item.addEventListener('click', async (ev) => { ev.stopPropagation(); menu.remove(); await action(); });
+            menu.appendChild(item);
+          };
+          mkItem(t('eyeCare.setAsDefault'), async () => {
+            this.settings.defaultEyeCareColor = `__customcolor_${cIdx}`;
+            await this.saveSettings();
+            new Notice(t('eyeCare.setAsDefaultDone'));
+            renderEyeCare();
+          });
+          if (this.settings.defaultEyeCareColor === `__customcolor_${cIdx}`) {
+            mkItem(t('eyeCare.clearDefault'), async () => {
+              this.settings.defaultEyeCareColor = '';
+              await this.saveSettings();
+              new Notice(t('eyeCare.clearDefaultDone'));
+              renderEyeCare();
+            });
+          }
+          mkItem(t('eyeCare.imgDelete'), async () => {
+            this.settings.customBgColors.splice(cIdx, 1);
+            if (this.settings.eyeCareColor === `__customcolor_${cIdx}`) {
+              this.settings.eyeCareColor = '';
+            } else if (this.settings.eyeCareColor?.startsWith('__customcolor_')) {
+              const curIdx = parseInt(this.settings.eyeCareColor.slice(14), 10);
+              if (curIdx > cIdx) this.settings.eyeCareColor = `__customcolor_${curIdx - 1}`;
+            }
+            this.applyEyeCareColor();
+            await this.saveSettings();
+            renderEyeCare();
+            new Notice(t('eyeCare.imgDeleted'));
+          });
+          document.body.appendChild(menu);
+          const closeMenu = () => { if (document.body.contains(menu)) menu.remove(); document.removeEventListener('click', closeMenu); };
+          setTimeout(() => document.addEventListener('click', closeMenu), 10);
+        });
+      });
+
+      const addColorChip = chipsContainer.createEl('span');
+      addColorChip.textContent = '+ ' + t('eyeCare.addColor');
+      addColorChip.title = t('eyeCare.addColorTitle');
+      addColorChip.style.cssText = `
+        display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;
+        border:1px dashed var(--background-modifier-border);background:transparent;color:var(--text-muted);
+        transition:all 0.15s ease;user-select:none;
+      `;
+      addColorChip.addEventListener('mouseenter', () => {
+        addColorChip.style.borderColor = 'var(--interactive-accent)';
+        addColorChip.style.color = 'var(--interactive-accent)';
+      });
+      addColorChip.addEventListener('mouseleave', () => {
+        addColorChip.style.borderColor = 'var(--background-modifier-border)';
+        addColorChip.style.color = 'var(--text-muted)';
+      });
+      addColorChip.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const existingPicker = document.getElementById('ss-color-picker-popup');
+        if (existingPicker) { existingPicker.remove(); return; }
+        const picker = document.createElement('div');
+        picker.id = 'ss-color-picker-popup';
+        picker.style.cssText = `
+          position:fixed;z-index:10002;
+          background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+          border:1px solid var(--background-modifier-border);border-radius:8px;
+          box-shadow:0 4px 16px rgba(0,0,0,0.25);padding:12px;min-width:200px;
+        `;
+        const rect = addColorChip.getBoundingClientRect();
+        picker.style.left = rect.left + 'px';
+        picker.style.top = (rect.bottom + 6) + 'px';
+        requestAnimationFrame(() => {
+          const pRect = picker.getBoundingClientRect();
+          if (pRect.right > window.innerWidth) picker.style.left = (window.innerWidth - pRect.width - 8) + 'px';
+          if (pRect.bottom > window.innerHeight) picker.style.top = (rect.top - pRect.height - 6) + 'px';
+        });
+        const row = picker.createDiv();
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+        const colorInput = row.createEl('input', { type: 'color' });
+        colorInput.value = '#ff6600';
+        colorInput.style.cssText = 'width:36px;height:28px;padding:0;cursor:pointer;border:1px solid var(--background-modifier-border);border-radius:4px;';
+        const textInput = row.createEl('input', { type: 'text' });
+        textInput.placeholder = t('eyeCare.addColorPlaceholder');
+        textInput.value = '#ff6600';
+        textInput.style.cssText = 'flex:1;padding:4px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:12px;';
+        colorInput.addEventListener('input', () => { textInput.value = colorInput.value; });
+        textInput.addEventListener('input', () => {
+          const v = textInput.value.trim();
+          if (/^#[0-9a-fA-F]{6}$/.test(v)) colorInput.value = v;
+        });
+        const btnRow = picker.createDiv();
+        btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;margin-top:8px;';
+        const cancelBtn = btnRow.createEl('button', { text: t('btn.cancel') });
+        cancelBtn.style.cssText = 'padding:3px 10px;border:1px solid var(--background-modifier-border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px;';
+        cancelBtn.addEventListener('click', () => picker.remove());
+        const addBtn = btnRow.createEl('button', { text: t('eyeCare.addColor') });
+        addBtn.style.cssText = 'padding:3px 10px;border:none;border-radius:4px;background:var(--interactive-accent);color:#fff;cursor:pointer;font-size:11px;';
+        addBtn.addEventListener('click', async () => {
+          const colorVal = textInput.value.trim();
+          if (!/^#[0-9a-fA-F]{6}$/.test(colorVal)) {
+            new Notice(t('eyeCare.addColorInvalid'));
+            return;
+          }
+          if (!this.settings.customBgColors) this.settings.customBgColors = [];
+          this.settings.customBgColors.push(colorVal);
+          const newIdx = this.settings.customBgColors.length - 1;
+          this.settings.eyeCareColor = `__customcolor_${newIdx}`;
+          for (const name of bgMembers) { this._setSnippetEnabled(name, false); }
+          this.applyEyeCareColor();
+          await this.saveSettings();
+          picker.remove();
+          new Notice(t('eyeCare.addColorDone'));
+          renderEyeCare();
+        });
+        document.body.appendChild(picker);
+        const closePicker = (e) => {
+          if (!picker.contains(e.target) && e.target !== addColorChip) { picker.remove(); document.removeEventListener('click', closePicker); }
+        };
+        setTimeout(() => document.addEventListener('click', closePicker), 10);
+      });
+
       chipsContainer.addEventListener('dragover', (e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
@@ -3109,7 +3616,7 @@ class SwiftSwitchPlugin extends Plugin {
     renderEyeCare();
 
     // ── 内容区域 ──────────────────────────────────────────────────────
-    const contentArea = popup.createDiv();
+    const contentArea = scrollBody.createDiv();
     contentArea.style.cssText = 'min-height:60px;';
 
     // 拖拽状态（使用实例属性，避免闭包传值问题）
@@ -3366,7 +3873,7 @@ class SwiftSwitchPlugin extends Plugin {
     renderContent();
 
     // ── 字体区域（手机端隐藏） ──────────────────────────────────────────────
-    const fontArea = popup.createDiv();
+    const fontArea = scrollBody.createDiv();
     fontArea.style.cssText = 'margin-top:8px;';
 
     const fontHeader = fontArea.createDiv();
@@ -3452,8 +3959,17 @@ class SwiftSwitchPlugin extends Plugin {
     fontChipsContainer.setAttribute('data-ss-font-chips', '');
     fontChipsContainer.style.cssText = isMobile ? 'display:none;' : `display:${isFontCollapsed ? 'none' : 'flex'};flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;padding:4px;`;
 
-    const fontSettingsPanel = fontArea.createDiv();
-    fontSettingsPanel.style.cssText = isMobile ? `display:block;margin-top:6px;padding:8px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.3);` : `display:${isFontCollapsed ? 'none' : 'block'};margin-top:6px;padding:8px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.3);`;
+    const fontStyleArea = scrollBody.createDiv();
+    fontStyleArea.style.cssText = 'margin-top:4px;';
+
+    const fontStyleHeader = fontStyleArea.createDiv();
+    fontStyleHeader.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;user-select:none;';
+
+    const fontStyleLabel = fontStyleHeader.createEl('span', { text: t('font.section') + ' ' + (_currentLang === 'zh' ? '样式' : 'Style') });
+    fontStyleLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);';
+
+    const fontSettingsPanel = fontStyleArea.createDiv();
+    fontSettingsPanel.style.cssText = `display:block;margin-top:4px;padding:8px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.3);`;
 
     let fontsLoaded = false;
 
@@ -3610,12 +4126,12 @@ class SwiftSwitchPlugin extends Plugin {
 
     const renderFontSettings = () => {
       fontSettingsPanel.innerHTML = '';
-      if (!isMobile && !this.settings.activeFont && !this.settings.fontColor && this.settings.fontOpacity >= 1 && !this.settings.fontLineHeight && !this.settings.fontMarginL && !this.settings.fontMarginR) {
-        fontSettingsPanel.style.display = 'none';
+      if (!this.settings.fontColor && this.settings.fontOpacity >= 1 && !this.settings.fontLineHeight && !this.settings.fontMarginL && !this.settings.fontMarginR) {
+        fontStyleArea.style.display = 'none';
         return;
       }
+      fontStyleArea.style.display = 'block';
       fontSettingsPanel.style.display = 'block';
-
       const row1 = fontSettingsPanel.createDiv();
       row1.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
 
@@ -3724,14 +4240,10 @@ class SwiftSwitchPlugin extends Plugin {
       fontCollapseIcon.textContent = collapsed ? '▶' : '▼';
       if (collapsed) {
         fontChipsContainer.style.display = 'none';
-        fontSettingsPanel.style.display = 'none';
         fontHint.textContent = t('font.clickToLoad');
       } else {
         if (fontsLoaded) {
           fontChipsContainer.style.display = 'flex';
-          if (this.settings.activeFont || this.settings.fontColor || this.settings.fontLineHeight || this.settings.fontMarginL || this.settings.fontMarginR) {
-            fontSettingsPanel.style.display = 'block';
-          }
         }
       }
     };
@@ -3739,8 +4251,8 @@ class SwiftSwitchPlugin extends Plugin {
 
     fontLabel.addEventListener('click', async () => {
       if (isMobile) {
-        const isCurrentlyVisible = fontSettingsPanel.style.display !== 'none';
-        fontSettingsPanel.style.display = isCurrentlyVisible ? 'none' : 'block';
+        const isCurrentlyVisible = fontStyleArea.style.display !== 'none';
+        fontStyleArea.style.display = isCurrentlyVisible ? 'none' : 'block';
         return;
       }
       if (!fontsLoaded) {
@@ -3762,16 +4274,69 @@ class SwiftSwitchPlugin extends Plugin {
       await toggleFontCollapse(isCurrentlyVisible);
     });
 
-    if (isMobile) {
-      renderFontSettings();
-    }
+    renderFontSettings();
 
     // ── 底部：其他插件链接 ────────────────────────────────────────────
     const footer = popup.createDiv();
-    footer.style.cssText = 'padding-top:10px;margin-top:8px;border-top:1px solid var(--background-modifier-border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;opacity:0;transition:opacity 0.3s ease;cursor:default;';
+    footer.style.cssText = 'padding-top:10px;margin-top:auto;border-top:1px solid var(--background-modifier-border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;opacity:0.5;transition:opacity 0.3s ease;cursor:default;position:relative;flex-shrink:0;';
 
     footer.addEventListener('mouseenter', () => { footer.style.opacity = '1'; });
-    footer.addEventListener('mouseleave', () => { footer.style.opacity = '0'; });
+    footer.addEventListener('mouseleave', () => { footer.style.opacity = '0.5'; });
+
+    const settingsIcon = footer.createEl('span');
+    settingsIcon.textContent = '\u2699';
+    settingsIcon.title = t('settings.title');
+    settingsIcon.style.cssText = `
+      font-size:16px;cursor:pointer;user-select:none;opacity:0.6;transition:opacity 0.15s ease;
+      margin-right:4px;
+    `;
+    settingsIcon.addEventListener('mouseenter', () => { settingsIcon.style.opacity = '1'; });
+    settingsIcon.addEventListener('mouseleave', () => { settingsIcon.style.opacity = '0.6'; });
+    settingsIcon.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const existingSettings = document.getElementById('ss-settings-popup');
+      if (existingSettings) { existingSettings.remove(); return; }
+      const settingsPopup = document.createElement('div');
+      settingsPopup.id = 'ss-settings-popup';
+      settingsPopup.style.cssText = `
+        position:fixed;z-index:10002;
+        background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+        border:1px solid var(--background-modifier-border);border-radius:8px;
+        box-shadow:0 4px 16px rgba(0,0,0,0.25);padding:14px 18px;min-width:300px;max-width:460px;
+      `;
+      const rect = settingsIcon.getBoundingClientRect();
+      settingsPopup.style.left = rect.left + 'px';
+      settingsPopup.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+      requestAnimationFrame(() => {
+        const pRect = settingsPopup.getBoundingClientRect();
+        if (pRect.left + pRect.width > window.innerWidth) settingsPopup.style.left = (window.innerWidth - pRect.width - 8) + 'px';
+      });
+      const title = settingsPopup.createEl('div', { text: t('settings.title') });
+      title.style.cssText = 'font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text-normal);';
+
+      const autoBgRow = settingsPopup.createDiv();
+      autoBgRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;';
+      const autoBgLabel = autoBgRow.createEl('span', { text: t('settings.autoBgByName') });
+      autoBgLabel.style.cssText = 'font-size:12px;color:var(--text-normal);';
+      const autoBgToggle = autoBgRow.createEl('span');
+      const isAutoBgOn = !!this.settings.autoBgByName;
+      autoBgToggle.style.cssText = `display:inline-block;width:36px;height:20px;border-radius:10px;position:relative;cursor:pointer;transition:background 0.15s ease;background:${isAutoBgOn ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};flex-shrink:0;`;
+      const autoBgKnob = autoBgToggle.createEl('span');
+      autoBgKnob.style.cssText = `position:absolute;top:2px;left:${isAutoBgOn ? '18px' : '2px'};width:16px;height:16px;border-radius:50%;background:#fff;transition:left 0.15s ease;`;
+      autoBgToggle.addEventListener('click', async () => {
+        this.settings.autoBgByName = !this.settings.autoBgByName;
+        const on = this.settings.autoBgByName;
+        autoBgToggle.style.background = on ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+        autoBgKnob.style.left = on ? '18px' : '2px';
+        await this.saveSettings();
+      });
+
+      document.body.appendChild(settingsPopup);
+      const closeSettings = (e) => {
+        if (!settingsPopup.contains(e.target) && e.target !== settingsIcon) { settingsPopup.remove(); document.removeEventListener('click', closeSettings); }
+      };
+      setTimeout(() => document.addEventListener('click', closeSettings), 10);
+    });
 
     const footerLabel = footer.createEl('span');
     footerLabel.textContent = _currentLang === 'zh' ? '更多插件' : 'More Plugins';
@@ -4112,6 +4677,47 @@ class SwiftSwitchPlugin extends Plugin {
       };
 
       // 复制
+      if (currentGroup === '__bg__') {
+        mkItem(t('eyeCare.setAsDefault'), async () => {
+          this.settings.defaultEyeCareColor = '__snippet__' + snippetName;
+          await this.saveSettings();
+          new Notice(t('eyeCare.setAsDefaultDone'));
+          rerender();
+        });
+        if (this.settings.defaultEyeCareColor === '__snippet__' + snippetName) {
+          mkItem(t('eyeCare.clearDefault'), async () => {
+            this.settings.defaultEyeCareColor = '';
+            await this.saveSettings();
+            new Notice(t('eyeCare.clearDefaultDone'));
+            rerender();
+          });
+        }
+        const mkToggle = (label, isOn, action) => {
+          const item = document.createElement('div');
+          item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);display:flex;align-items:center;justify-content:space-between;gap:12px;';
+          const labelEl = document.createElement('span');
+          labelEl.textContent = label;
+          const toggle = document.createElement('span');
+          toggle.style.cssText = `display:inline-block;width:28px;height:16px;border-radius:8px;position:relative;transition:background 0.15s ease;background:${isOn ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};flex-shrink:0;`;
+          const knob = document.createElement('span');
+          knob.style.cssText = `position:absolute;top:2px;left:${isOn ? '14px' : '2px'};width:12px;height:12px;border-radius:50%;background:#fff;transition:left 0.15s ease;`;
+          toggle.appendChild(knob);
+          item.appendChild(labelEl);
+          item.appendChild(toggle);
+          item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
+          item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+          item.addEventListener('click', async () => { menu.remove(); await action(); });
+          menu.appendChild(item);
+        };
+        mkToggle(t('eyeCare.defaultMode'), !!this.settings.defaultEyeCareMode, async () => {
+          if (this.settings.defaultEyeCareMode) {
+            this.settings.defaultEyeCareMode = '';
+          } else {
+            this.settings.defaultEyeCareMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+          }
+          await this.saveSettings();
+        });
+      }
       mkItem(t('context.copy'), async () => {
         try {
           const cssPath = '.obsidian/snippets/' + snippetName + '.css';
@@ -4284,10 +4890,11 @@ class SwiftSwitchPlugin extends Plugin {
 
   // ─── 添加 Snippet 表单 ──────────────────────────────────────────────────
   _showAddForm(popup, rerender) {
+    const container = popup.firstChild || popup;
     const existingForm = popup.querySelector('.ss-form');
     if (existingForm) existingForm.remove();
 
-    const form = popup.createDiv();
+    const form = container.createDiv();
     form.className = 'ss-form';
     form.style.cssText = 'margin-top:10px;padding:10px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.4);';
 
@@ -4328,10 +4935,11 @@ class SwiftSwitchPlugin extends Plugin {
   // ─── 编辑 Snippet 表单 ──────────────────────────────────────────────────
   _showEditForm(popup, snippetName, content, editPath, rerender) {
     if (!popup) return;
+    const container = popup.firstChild || popup;
     const existingForm = popup.querySelector('.ss-form');
     if (existingForm) existingForm.remove();
 
-    const form = popup.createDiv();
+    const form = container.createDiv();
     form.className = 'ss-form';
     form.style.cssText = 'margin-top:10px;padding:10px;border:1px solid var(--background-modifier-border);border-radius:6px;background:rgba(var(--mono-rgb-0),0.4);';
 

@@ -3,7 +3,6 @@
 Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
 ![Demo](assets/demo.gif)
-![demo-phone](assets/demo-phone.png)
 
 ## Features
 
@@ -50,6 +49,21 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 
 <details>
 <summary>Changelog</summary>
+
+### v1.1.8 (2026-07-06)
+
+- **Custom Background Color** — Add "+ Add" chip at the end of background/image chips; click to open a color picker with manual hex input; custom colors auto-invert when switching dark/light mode
+- **Default Mode Toggle** — Right-click theme or background chip to set "Default mode for new pages: dark/light" toggle below "Set as default for new pages"
+- **Cyclic Background Scroll** — Floating button scroll wheel now cycles through backgrounds (wraps from last to first and vice versa)
+- **Independent Font Style Settings** — Color, opacity, line height, and margin settings moved from under "Font" to a separate "Font Style" section at the same level; works regardless of font toggle state
+- **Settings Panel** — ⚙️ icon in footer opens a settings popup; includes "Use same-name image as background on document open" option
+- **Fixed Footer** — Settings icon and plugin links are now pinned to the bottom of the management panel
+
+### v1.1.7 (2026-07-05)
+
+- **Theme Delete** — Right-click theme chip to delete theme; auto-switches to default if deleting active theme; confirmation dialog with hint
+- **Default Theme for New Pages** — Right-click theme chip to set as default for new pages; when memory mode is on and a page has no saved style, the default theme is applied automatically
+- **Default Background for New Pages** — Right-click background/image chip to set as default for new pages; supports preset snippets and custom images; auto-applied to pages without saved style
 
 ### v1.1.6 (2026-07-02)
 

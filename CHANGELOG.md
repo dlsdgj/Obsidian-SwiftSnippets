@@ -1,4 +1,19 @@
-## 🆕 v1.1.6 (2026-07-02)
+## 🆕 v1.1.8 (2026-07-06)
+
+- **Custom Background Color / 自定义背景色** — Add "+ Add" chip at the end of background/image chips; click to open a color picker with manual hex input; custom colors auto-invert when switching dark/light mode / 背景/图片区域末尾添加"+ 添加"chip，点击弹出颜色选择器支持手动输入色值，深浅模式自动反色
+- **Default Mode Toggle / 新页面默认深浅模式** — Right-click theme or background chip to set "Default mode for new pages: dark/light" toggle below "Set as default for new pages" / 主题chip和背景chip右键菜单"设为新页面默认"下方添加"新页面默认为:深/浅"开关
+- **Cyclic Background Scroll / 循环滚动切换背景** — Floating button scroll wheel now cycles through backgrounds (wraps from last to first and vice versa) / 悬浮按钮滚轮切换背景改为循环滚动（到末尾回到开头）
+- **Independent Font Style Settings / 独立字体样式设置** — Color, opacity, line height, and margin settings moved from under "Font" to a separate "Font Style" section at the same level; works regardless of font toggle state / 字体颜色/透明度/行间距/边距设置从"字体"标题下独立为"字体 样式"同级区域，无论字体切换是否启用均可工作
+- **Settings Panel / 设置面板** — ⚙️ icon in footer opens a settings popup; includes "Use same-name image as background on document open" option / 底部⚙️图标打开设置窗口，含"打开文档时使用同名图片作背景"选项
+- **Fixed Footer / 底部固定** — Settings icon and plugin links are now pinned to the bottom of the management panel / 设置按钮和更多插件链接固定在管理面板窗口底部
+
+## v1.1.7 (2026-07-05)
+
+- **Theme Delete / 主题删除** — Right-click theme chip to delete theme; auto-switches to default if deleting active theme; confirmation dialog with hint / 右键主题chip可删除主题；删除当前主题时自动切换为默认；带确认对话框
+- **Default Theme for New Pages / 新页面默认主题** — Right-click theme chip to set as default for new pages; when memory mode is on and a page has no saved style, the default theme is applied automatically / 右键主题chip设为新页面默认主题；记忆模式下无保存风格的新页面自动应用默认主题
+- **Default Background for New Pages / 新页面默认背景** — Right-click background/image chip to set as default for new pages; supports preset snippets and custom images; auto-applied to pages without saved style / 右键背景/图片chip设为新页面默认背景；支持预设snippet和自定义图片；无保存风格的新页面自动应用
+
+## v1.1.6 (2026-07-02)
 
 - **Mobile Support / 支持移动端背景切换** — Background/image switching now works on Obsidian Mobile; ribbon icon entry; mobile font color/opacity/line-height/margin settings; pic/phone/ subfolder for mobile-specific images / 背景图片切换现已支持 Obsidian 移动端；左侧栏图标入口；手机端字体颜色/透明度/行间距/边距设置；pic/phone/ 子目录存放手机专属图片
 
