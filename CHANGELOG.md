@@ -1,4 +1,9 @@
-## 🆕 v1.1.8 (2026-07-06)
+## 🆕 v1.1.9 (2026-08-13)
+
+- **Chip Hover Tooltip / Chip悬停提示** — Hover any chip (theme, background, snippet, etc.) to instantly see its right-click options as an interactive tooltip; click an option to execute it directly without right-clicking / 鼠标悬停任意Chip（主题、背景、snippet等）即可显示其全部右键选项的互动提示，点击选项可直接执行，无需右键
+- **Background Leak Fix / 背景泄漏修复** — Fixed background leaking to new pages when switching documents with style memory enabled; "Set as default for new pages" now works independently even when style memory is off; same-name image background no longer leaks to pages without a matching image / 修复记忆模式下切换文档时背景泄漏到新页面的问题；"设为新页面默认"在风格记忆关闭时也独立生效；同名图片背景不再泄漏到无同名图片的页面
+
+## v1.1.8 (2026-07-06)
 
 - **Custom Background Color / 自定义背景色** — Add "+ Add" chip at the end of background/image chips; click to open a color picker with manual hex input; custom colors auto-invert when switching dark/light mode / 背景/图片区域末尾添加"+ 添加"chip，点击弹出颜色选择器支持手动输入色值，深浅模式自动反色
 - **Default Mode Toggle / 新页面默认深浅模式** — Right-click theme or background chip to set "Default mode for new pages: dark/light" toggle below "Set as default for new pages" / 主题chip和背景chip右键菜单"设为新页面默认"下方添加"新页面默认为:深/浅"开关

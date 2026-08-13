@@ -50,6 +50,11 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 <details>
 <summary>Changelog</summary>
 
+### v1.1.9 (2026-08-13)
+
+- **Chip Hover Tooltip** — Hover any chip (theme, background, snippet, etc.) to instantly see its right-click options as an interactive tooltip; click an option to execute it directly without right-clicking
+- **Background Leak Fix** — Fixed background leaking to new pages when switching documents with style memory enabled; "Set as default for new pages" now works independently even when style memory is off; same-name image background no longer leaks to pages without a matching image
+
 ### v1.1.8 (2026-07-06)
 
 - **Custom Background Color** — Add "+ Add" chip at the end of background/image chips; click to open a color picker with manual hex input; custom colors auto-invert when switching dark/light mode

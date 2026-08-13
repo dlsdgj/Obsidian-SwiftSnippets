@@ -423,6 +423,9 @@ class SwiftSwitchPlugin extends Plugin {
       if (this.settings.autoBgByName && newPath) {
         await this._applyAutoBgByName(newPath);
       }
+      if (!this.settings.styleMemory && !this.settings.autoBgByName && newPath) {
+        await this._applyDefaultBackground();
+      }
       const popup = document.getElementById('ss-snippets-popup');
       if (popup && popup._ssRenderContent) {
         await new Promise(r => setTimeout(r, 200));
@@ -2271,7 +2274,14 @@ class SwiftSwitchPlugin extends Plugin {
 
     if (!profile) {
       const hasDefault = this.settings.defaultTheme || this.settings.defaultEyeCareColor || this.settings.defaultThemeMode || this.settings.defaultEyeCareMode;
-      if (!hasDefault) return;
+      if (!hasDefault) {
+        if (this.settings.eyeCareColor) {
+          this.settings.eyeCareColor = '';
+          this.applyEyeCareColor();
+          await this.saveSettings();
+        }
+        return;
+      }
       try {
         if (this.settings.defaultThemeMode) {
           const currentIsDark = document.body.classList.contains('theme-dark');
@@ -2367,7 +2377,80 @@ class SwiftSwitchPlugin extends Plugin {
       for (const name of bgMembers) { this._setSnippetEnabled(name, false); }
       this.applyEyeCareColor();
       await this.saveSettings();
+    } else if (!this.settings.styleMemory) {
+      if (this.settings.eyeCareColor) {
+        this.settings.eyeCareColor = '';
+        this.applyEyeCareColor();
+        await this.saveSettings();
+      }
     }
+  }
+
+  async _applyDefaultBackground() {
+    const dec = this.settings.defaultEyeCareColor;
+    if (dec) {
+      if (dec.startsWith('__snippet__')) {
+        const snippetName = dec.slice('__snippet__'.length);
+        this._setSnippetEnabled(snippetName, true);
+        this.settings.eyeCareColor = '';
+        this.applyEyeCareColor();
+      } else {
+        this.settings.eyeCareColor = dec;
+        this.applyEyeCareColor();
+      }
+    } else {
+      if (this.settings.eyeCareColor) {
+        this.settings.eyeCareColor = '';
+        this.applyEyeCareColor();
+      }
+    }
+    await this.saveSettings();
+  }
+
+  _showSsChipTooltip(anchor, options) {
+    this._hideSsChipTooltip();
+    if (!options || options.length === 0) return;
+    const tip = document.createElement('div');
+    tip.className = 'ss-chip-tooltip';
+    tip.style.cssText = 'position:fixed;z-index:10001;background:rgba(var(--mono-rgb-0),0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--background-modifier-border);border-radius:6px;padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,0.25);min-width:120px;';
+    options.forEach(opt => {
+      const row = document.createElement('div');
+      row.textContent = opt.label;
+      row.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);';
+      row.addEventListener('mouseenter', () => { row.style.background = 'var(--background-modifier-hover)'; });
+      row.addEventListener('mouseleave', () => { row.style.background = 'transparent'; });
+      row.addEventListener('click', async (ev) => { ev.stopPropagation(); this._hideSsChipTooltip(); if (opt.action) await opt.action(); });
+      tip.appendChild(row);
+    });
+    tip.addEventListener('mouseleave', () => { this._ssChipTooltipTimer = setTimeout(() => this._hideSsChipTooltip(), 120); });
+    tip.addEventListener('mouseenter', () => { if (this._ssChipTooltipTimer) { clearTimeout(this._ssChipTooltipTimer); this._ssChipTooltipTimer = null; } });
+    document.body.appendChild(tip);
+    const rect = anchor.getBoundingClientRect();
+    const tipRect = tip.getBoundingClientRect();
+    let left = rect.left;
+    let top = rect.bottom + 4;
+    if (left + tipRect.width > window.innerWidth - 4) left = window.innerWidth - tipRect.width - 4;
+    if (left < 4) left = 4;
+    if (top + tipRect.height > window.innerHeight - 4) top = rect.top - tipRect.height - 4;
+    if (top < 4) top = 4;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+    this._ssChipTooltip = tip;
+  }
+
+  _hideSsChipTooltip() {
+    if (this._ssChipTooltipTimer) { clearTimeout(this._ssChipTooltipTimer); this._ssChipTooltipTimer = null; }
+    if (this._ssChipTooltip) { this._ssChipTooltip.remove(); this._ssChipTooltip = null; }
+  }
+
+  _attachSsChipHover(chip, buildOpts) {
+    chip.addEventListener('mouseenter', () => {
+      if (this._ssChipTooltipTimer) { clearTimeout(this._ssChipTooltipTimer); this._ssChipTooltipTimer = null; }
+      this._showSsChipTooltip(chip, buildOpts());
+    });
+    chip.addEventListener('mouseleave', () => {
+      this._ssChipTooltipTimer = setTimeout(() => { if (this._ssChipTooltip && !this._ssChipTooltip.matches(':hover')) this._hideSsChipTooltip(); }, 120);
+    });
   }
 
   // ─── 切换 snippet 状态（带缓存同步）──────────────────────────────────────
@@ -2799,6 +2882,31 @@ class SwiftSwitchPlugin extends Plugin {
         applyThemeChipStyle(defaultChip, true);
         themeChipEls.forEach(({ el, name }) => applyThemeChipStyle(el, false));
       });
+      const buildDefaultThemeOpts = () => {
+        const opts = [];
+        opts.push({ label: t('theme.setAsDefault'), action: async () => {
+          this.settings.defaultTheme = '';
+          await this.saveSettings();
+          new Notice(t('theme.setAsDefaultDone'));
+        }});
+        if (this.settings.defaultTheme !== '') {
+          opts.push({ label: t('theme.clearDefault'), action: async () => {
+            this.settings.defaultTheme = '';
+            await this.saveSettings();
+            new Notice(t('theme.clearDefaultDone'));
+          }});
+        }
+        const _dmOn = !!this.settings.defaultThemeMode;
+        opts.push({ label: (_dmOn ? '✓ ' : '○ ') + t('theme.defaultMode'), action: async () => {
+          if (this.settings.defaultThemeMode) {
+            this.settings.defaultThemeMode = '';
+          } else {
+            this.settings.defaultThemeMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+          }
+          await this.saveSettings();
+        }});
+        return opts;
+      };
       defaultChip.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -2857,6 +2965,7 @@ class SwiftSwitchPlugin extends Plugin {
         };
         setTimeout(() => document.addEventListener('click', closeMenu), 0);
       });
+      this._attachSsChipHover(defaultChip, buildDefaultThemeOpts);
 
       const themeChipEls = [];
       themeDirs.forEach(themeName => {
@@ -2891,6 +3000,56 @@ class SwiftSwitchPlugin extends Plugin {
           applyThemeChipStyle(defaultChip, false);
           themeChipEls.forEach(({ el, name }) => applyThemeChipStyle(el, name === themeName));
         });
+        const buildThemeOpts = () => {
+          const opts = [];
+          opts.push({ label: t('theme.setAsDefault'), action: async () => {
+            this.settings.defaultTheme = themeName;
+            await this.saveSettings();
+            new Notice(t('theme.setAsDefaultDone'));
+            await renderThemes();
+          }});
+          if (this.settings.defaultTheme === themeName) {
+            opts.push({ label: t('theme.clearDefault'), action: async () => {
+              this.settings.defaultTheme = '';
+              await this.saveSettings();
+              new Notice(t('theme.clearDefaultDone'));
+              await renderThemes();
+            }});
+          }
+          const _dmOn = !!this.settings.defaultThemeMode;
+          opts.push({ label: (_dmOn ? '✓ ' : '○ ') + t('theme.defaultMode'), action: async () => {
+            if (this.settings.defaultThemeMode) {
+              this.settings.defaultThemeMode = '';
+            } else {
+              this.settings.defaultThemeMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+            }
+            await this.saveSettings();
+          }});
+          opts.push({ label: t('theme.delete'), action: async () => {
+            const confirmMsg = t('theme.deleteConfirm').replace('{0}', themeName);
+            if (isActive) {
+              const hint = t('theme.activeDeleteHint');
+              if (!confirm(confirmMsg + '\n' + hint)) return;
+              await this.switchTheme('');
+              currentTheme = '';
+            } else {
+              if (!confirm(confirmMsg)) return;
+            }
+            try {
+              if (isMobile) {
+                await this.app.vault.adapter.rmdir('.obsidian/themes/' + themeName, true);
+              } else {
+                const themePath = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'themes', themeName);
+                nodeFs.rmSync(themePath, { recursive: true, force: true });
+              }
+              new Notice(t('theme.deleted'));
+              await renderThemes();
+            } catch (_e) {
+              new Notice(t('theme.deleteFailed'));
+            }
+          }});
+          return opts;
+        };
         chip.addEventListener('contextmenu', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -2974,6 +3133,7 @@ class SwiftSwitchPlugin extends Plugin {
           };
           setTimeout(() => document.addEventListener('click', closeMenu), 0);
         });
+        this._attachSsChipHover(chip, buildThemeOpts);
       });
 
       // "More..." chip → 打开社区主题面板
@@ -3287,6 +3447,125 @@ class SwiftSwitchPlugin extends Plugin {
           renderEyeCare();
           renderContent();
         });
+        const buildImgOpts = () => {
+          const opts = [];
+          opts.push({ label: t('eyeCare.imgRename'), action: async () => {
+            const newName = await this._promptGroupName(img.paired ? img.label : img.url, t('eyeCare.imgRenameTitle'));
+            if (!newName) return;
+            try {
+              if (isMobile) {
+                if (img.paired) {
+                  const ext = img.url.substring(img.url.lastIndexOf('.'));
+                  const picBase = '.obsidian/plugins/SwiftSnippets/pic/';
+                  try { await this.app.vault.adapter.rename(picBase + img.url, picBase + newName + '-light' + ext); } catch (_e) {}
+                  try { await this.app.vault.adapter.rename(picBase + img.urlDark, picBase + newName + '-dark' + ext); } catch (_e) {}
+                  img.url = newName + '-light' + ext;
+                  img.urlDark = newName + '-dark' + ext;
+                  img.label = newName;
+                } else {
+                  const picBase = '.obsidian/plugins/SwiftSnippets/pic/';
+                  try { await this.app.vault.adapter.rename(picBase + img.url, picBase + newName); img.url = newName; img.label = newName; } catch (_e) {}
+                }
+              } else {
+              if (img.paired) {
+                const ext = img.url.substring(img.url.lastIndexOf('.'));
+                const oldLightPath = _joinPath(picDir, 'pic', img.url);
+                const oldDarkPath = _joinPath(picDir, 'pic', img.urlDark);
+                const newLightPath = _joinPath(picDir, 'pic', newName + '-light' + ext);
+                const newDarkPath = _joinPath(picDir, 'pic', newName + '-dark' + ext);
+                if (nodeFs.existsSync(oldLightPath)) nodeFs.renameSync(oldLightPath, newLightPath);
+                if (nodeFs.existsSync(oldDarkPath)) nodeFs.renameSync(oldDarkPath, newDarkPath);
+                img.url = newName + '-light' + ext;
+                img.urlDark = newName + '-dark' + ext;
+                img.label = newName;
+              } else {
+                const oldPath = _joinPath(picDir, 'pic', img.url);
+                const newPath = _joinPath(picDir, 'pic', newName);
+                if (nodeFs.existsSync(oldPath)) {
+                  nodeFs.renameSync(oldPath, newPath);
+                  img.url = newName;
+                  img.label = newName;
+                }
+              }
+              }
+              await this.saveSettings();
+              this.applyEyeCareColor();
+              renderEyeCare();
+            } catch (_e) { new Notice(t('eyeCare.imgRenameFailed')); }
+          }});
+          opts.push({ label: t('eyeCare.imgRotate'), action: async () => {
+            try {
+              if (img.paired) {
+                await this._rotateImage(img.url);
+                await this._rotateImage(img.urlDark);
+              } else {
+                await this._rotateImage(img.url);
+              }
+              this.applyEyeCareColor();
+              renderEyeCare();
+              new Notice(t('eyeCare.imgRotated'));
+            } catch (_e) { new Notice(t('eyeCare.imgRotateFailed')); }
+          }});
+          opts.push({ label: t('eyeCare.setAsDefault'), action: async () => {
+            this.settings.defaultEyeCareColor = `__img_${idx}`;
+            await this.saveSettings();
+            new Notice(t('eyeCare.setAsDefaultDone'));
+            renderEyeCare();
+          }});
+          if (this.settings.defaultEyeCareColor === `__img_${idx}`) {
+            opts.push({ label: t('eyeCare.clearDefault'), action: async () => {
+              this.settings.defaultEyeCareColor = '';
+              await this.saveSettings();
+              new Notice(t('eyeCare.clearDefaultDone'));
+              renderEyeCare();
+            }});
+          }
+          const _dmOn = !!this.settings.defaultEyeCareMode;
+          opts.push({ label: (_dmOn ? '✓ ' : '○ ') + t('eyeCare.defaultMode'), action: async () => {
+            if (this.settings.defaultEyeCareMode) {
+              this.settings.defaultEyeCareMode = '';
+            } else {
+              this.settings.defaultEyeCareMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+            }
+            await this.saveSettings();
+          }});
+          opts.push({ label: t('eyeCare.imgDelete'), action: async () => {
+            try {
+              if (isMobile) {
+                if (img.paired) {
+                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.url); } catch (_e) {}
+                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.urlDark); } catch (_e) {}
+                } else {
+                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.url); } catch (_e) {}
+                }
+              } else {
+              if (img.paired) {
+                const lightPath = _joinPath(picDir, 'pic', img.url);
+                const darkPath = _joinPath(picDir, 'pic', img.urlDark);
+                if (nodeFs.existsSync(lightPath)) nodeFs.unlinkSync(lightPath);
+                if (nodeFs.existsSync(darkPath)) nodeFs.unlinkSync(darkPath);
+              } else {
+                const delPath = _joinPath(picDir, 'pic', img.url);
+                if (nodeFs.existsSync(delPath)) nodeFs.unlinkSync(delPath);
+              }
+              }
+              const imgs2 = this.settings.bgImages || [];
+              const delIdx = imgs2.findIndex(i => i === img);
+              if (delIdx >= 0) imgs2.splice(delIdx, 1);
+              if (this.settings.eyeCareColor === `__img_${delIdx}`) {
+                this.settings.eyeCareColor = '';
+              } else if (this.settings.eyeCareColor?.startsWith('__img_')) {
+                const curIdx = parseInt(this.settings.eyeCareColor.slice(6), 10);
+                if (curIdx > delIdx) this.settings.eyeCareColor = `__img_${curIdx - 1}`;
+              }
+              await this.saveSettings();
+              this.applyEyeCareColor();
+              renderEyeCare();
+              new Notice(t('eyeCare.imgDeleted'));
+            } catch (_e) { new Notice('Delete failed'); }
+          }});
+          return opts;
+        };
         chip.addEventListener('contextmenu', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -3437,6 +3716,7 @@ class SwiftSwitchPlugin extends Plugin {
           const closeMenu = () => { if (document.body.contains(menu)) menu.remove(); document.removeEventListener('click', closeMenu); };
           setTimeout(() => document.addEventListener('click', closeMenu), 10);
         });
+        this._attachSsChipHover(chip, buildImgOpts);
       });
 
       const customColors = this.settings.customBgColors || [];
@@ -3465,6 +3745,37 @@ class SwiftSwitchPlugin extends Plugin {
           renderEyeCare();
           renderContent();
         });
+        const buildColorOpts = () => {
+          const opts = [];
+          opts.push({ label: t('eyeCare.setAsDefault'), action: async () => {
+            this.settings.defaultEyeCareColor = `__customcolor_${cIdx}`;
+            await this.saveSettings();
+            new Notice(t('eyeCare.setAsDefaultDone'));
+            renderEyeCare();
+          }});
+          if (this.settings.defaultEyeCareColor === `__customcolor_${cIdx}`) {
+            opts.push({ label: t('eyeCare.clearDefault'), action: async () => {
+              this.settings.defaultEyeCareColor = '';
+              await this.saveSettings();
+              new Notice(t('eyeCare.clearDefaultDone'));
+              renderEyeCare();
+            }});
+          }
+          opts.push({ label: t('eyeCare.imgDelete'), action: async () => {
+            this.settings.customBgColors.splice(cIdx, 1);
+            if (this.settings.eyeCareColor === `__customcolor_${cIdx}`) {
+              this.settings.eyeCareColor = '';
+            } else if (this.settings.eyeCareColor?.startsWith('__customcolor_')) {
+              const curIdx = parseInt(this.settings.eyeCareColor.slice(14), 10);
+              if (curIdx > cIdx) this.settings.eyeCareColor = `__customcolor_${curIdx - 1}`;
+            }
+            this.applyEyeCareColor();
+            await this.saveSettings();
+            renderEyeCare();
+            new Notice(t('eyeCare.imgDeleted'));
+          }});
+          return opts;
+        };
         chip.addEventListener('contextmenu', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -3479,37 +3790,12 @@ class SwiftSwitchPlugin extends Plugin {
             item.addEventListener('click', async (ev) => { ev.stopPropagation(); menu.remove(); await action(); });
             menu.appendChild(item);
           };
-          mkItem(t('eyeCare.setAsDefault'), async () => {
-            this.settings.defaultEyeCareColor = `__customcolor_${cIdx}`;
-            await this.saveSettings();
-            new Notice(t('eyeCare.setAsDefaultDone'));
-            renderEyeCare();
-          });
-          if (this.settings.defaultEyeCareColor === `__customcolor_${cIdx}`) {
-            mkItem(t('eyeCare.clearDefault'), async () => {
-              this.settings.defaultEyeCareColor = '';
-              await this.saveSettings();
-              new Notice(t('eyeCare.clearDefaultDone'));
-              renderEyeCare();
-            });
-          }
-          mkItem(t('eyeCare.imgDelete'), async () => {
-            this.settings.customBgColors.splice(cIdx, 1);
-            if (this.settings.eyeCareColor === `__customcolor_${cIdx}`) {
-              this.settings.eyeCareColor = '';
-            } else if (this.settings.eyeCareColor?.startsWith('__customcolor_')) {
-              const curIdx = parseInt(this.settings.eyeCareColor.slice(14), 10);
-              if (curIdx > cIdx) this.settings.eyeCareColor = `__customcolor_${curIdx - 1}`;
-            }
-            this.applyEyeCareColor();
-            await this.saveSettings();
-            renderEyeCare();
-            new Notice(t('eyeCare.imgDeleted'));
-          });
+          buildColorOpts().forEach(o => mkItem(o.label, o.action));
           document.body.appendChild(menu);
           const closeMenu = () => { if (document.body.contains(menu)) menu.remove(); document.removeEventListener('click', closeMenu); };
           setTimeout(() => document.addEventListener('click', closeMenu), 10);
         });
+        this._attachSsChipHover(chip, buildColorOpts);
       });
 
       const addColorChip = chipsContainer.createEl('span');
@@ -4653,6 +4939,143 @@ class SwiftSwitchPlugin extends Plugin {
       if (isExclusive) setTimeout(() => rerender(), 50);
     });
 
+    const buildSnippetOpts = () => {
+      const opts = [];
+      if (currentGroup === '__bg__') {
+        opts.push({ label: t('eyeCare.setAsDefault'), action: async () => {
+          this.settings.defaultEyeCareColor = '__snippet__' + snippetName;
+          await this.saveSettings();
+          new Notice(t('eyeCare.setAsDefaultDone'));
+          rerender();
+        }});
+        if (this.settings.defaultEyeCareColor === '__snippet__' + snippetName) {
+          opts.push({ label: t('eyeCare.clearDefault'), action: async () => {
+            this.settings.defaultEyeCareColor = '';
+            await this.saveSettings();
+            new Notice(t('eyeCare.clearDefaultDone'));
+            rerender();
+          }});
+        }
+        const _dmOn = !!this.settings.defaultEyeCareMode;
+        opts.push({ label: (_dmOn ? '✓ ' : '○ ') + t('eyeCare.defaultMode'), action: async () => {
+          if (this.settings.defaultEyeCareMode) {
+            this.settings.defaultEyeCareMode = '';
+          } else {
+            this.settings.defaultEyeCareMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+          }
+          await this.saveSettings();
+        }});
+      }
+      opts.push({ label: t('context.copy'), action: async () => {
+        try {
+          const cssPath = '.obsidian/snippets/' + snippetName + '.css';
+          const jsPath = '.obsidian/snippets/' + snippetName + '.js';
+          let content = '';
+          try { content = await this.app.vault.adapter.read(cssPath); } catch (_e) {
+            try { content = await this.app.vault.adapter.read(jsPath); } catch (_e2) {}
+          }
+          await navigator.clipboard.writeText(content);
+          new Notice(t('btn.copied'));
+        } catch (_e) { new Notice('Copy failed'); }
+      }});
+      opts.push({ label: t('context.edit'), action: async () => {
+        const cssPath = '.obsidian/snippets/' + snippetName + '.css';
+        const jsPath = '.obsidian/snippets/' + snippetName + '.js';
+        let content = '', editPath = cssPath, readFailed = false;
+        try {
+          content = await this.app.vault.adapter.read(cssPath);
+        } catch (_e) {
+          try {
+            content = await this.app.vault.adapter.read(jsPath);
+            editPath = jsPath;
+          } catch (_e2) {
+            readFailed = true;
+          }
+        }
+        if (readFailed) {
+          new Notice('[SwiftSnippets] ' + (_currentLang === 'zh' ? '读取文件失败，请检查控制台日志' : 'Failed to read file, check console for details'));
+        }
+        this._showEditForm(document.getElementById('ss-snippets-popup'), snippetName, content, editPath, rerender);
+      }});
+      if (!isMobile) {
+        opts.push({ label: t('context.editExternal'), action: async () => {
+          try {
+            const snippetsDir = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'snippets');
+            let filePath = _joinPath(snippetsDir, snippetName + '.css');
+            if (!nodeFs.existsSync(filePath)) {
+              filePath = _joinPath(snippetsDir, snippetName + '.js');
+            }
+            if (nodeFs.existsSync(filePath)) {
+              const { shell } = require('electron');
+              await shell.openPath(filePath);
+            } else {
+              new Notice('File not found');
+            }
+          } catch (_e) { new Notice('Open failed'); }
+        }});
+      }
+      opts.push({ label: t('context.delete'), action: async () => {
+          if (chipEnabled) {
+            this._setSnippetEnabled(snippetName, false);
+          }
+          const presetMatch = snippetName.match(/^ss-(.+)$/);
+          if (presetMatch) {
+            if (!this.settings.deletedPresets) this.settings.deletedPresets = [];
+            if (!this.settings.deletedPresets.includes(presetMatch[1])) {
+              this.settings.deletedPresets.push(presetMatch[1]);
+            }
+          }
+          const snippetPath = '.obsidian/snippets/' + snippetName + '.css';
+          const jsSnippetPath = '.obsidian/snippets/' + snippetName + '.js';
+          let deleted = false;
+          try { await this.app.vault.adapter.remove(snippetPath); deleted = true; } catch (_e) {}
+          if (!deleted) { try { await this.app.vault.adapter.remove(jsSnippetPath); } catch (_e) {} }
+          await this.saveSettings();
+          rerender();
+      }});
+      const _groupNames = this.settings.groupOrder.filter(g => g !== currentGroup);
+      _groupNames.forEach(gName => {
+        opts.push({ label: t('context.moveToGroup') + ' ▸ ' + gName, action: async () => {
+          await this._moveToGroup(snippetName, gName);
+          rerender();
+        }});
+      });
+      if (currentGroup) {
+        if (currentGroup === '__bg__') {
+          opts.push({ label: t('context.delete'), action: async () => {
+              if (chipEnabled) {
+                this._setSnippetEnabled(snippetName, false);
+              }
+              const presetMatch = snippetName.match(/^ss-(.+)$/);
+              if (presetMatch) {
+                if (!this.settings.deletedPresets) this.settings.deletedPresets = [];
+                if (!this.settings.deletedPresets.includes(presetMatch[1])) {
+                  this.settings.deletedPresets.push(presetMatch[1]);
+                }
+              }
+              const snippetPath = '.obsidian/snippets/' + snippetName + '.css';
+              const jsSnippetPath = '.obsidian/snippets/' + snippetName + '.js';
+              let deleted = false;
+              try { await this.app.vault.adapter.remove(snippetPath); deleted = true; } catch (_e) {}
+              if (!deleted) { try { await this.app.vault.adapter.remove(jsSnippetPath); } catch (_e) {} }
+              const members = this.settings.groups[currentGroup];
+              if (members) {
+                const idx = members.indexOf(snippetName);
+                if (idx !== -1) members.splice(idx, 1);
+              }
+              await this.saveSettings();
+              rerender();
+          }});
+        } else {
+          opts.push({ label: t('context.removeFromGroup'), action: async () => {
+            await this._removeFromGroup(snippetName);
+            rerender();
+          }});
+        }
+      }
+      return opts;
+    };
+
     // 右键菜单
     chip.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -4875,6 +5298,7 @@ class SwiftSwitchPlugin extends Plugin {
       const closeMenu = () => { if (document.body.contains(menu)) menu.remove(); document.removeEventListener('click', closeMenu); };
       setTimeout(() => document.addEventListener('click', closeMenu), 10);
     });
+    this._attachSsChipHover(chip, buildSnippetOpts);
 
     // 拖拽
     chip.addEventListener('dragstart', (e) => {
