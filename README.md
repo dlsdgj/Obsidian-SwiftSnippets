@@ -50,6 +50,12 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 <details>
 <summary>Changelog</summary>
 
+### v1.2.0 (2026-09-08)
+
+- **Background Persistence Fix** — When style memory is off, switching pages no longer clears the current background; the applied background now persists across page switches. Added a delayed re-apply fallback to prevent Obsidian's re-render from stripping injected CSS
+- **Set/Clear Default Mutual Exclusion** — "Set as default for new pages" and "Clear default background" no longer appear simultaneously; only the relevant action shows based on current state
+- **Dark/Light Mode Setting Relocated** — Moved the "default dark/light mode for new pages" option out of image chip context menus into the bottom settings popup (hover the gear icon); replaced the binary toggle with a three-way selector (No switch / Dark / Light)
+
 ### v1.1.9 (2026-08-13)
 
 - **Chip Hover Tooltip** — Hover any chip (theme, background, snippet, etc.) to instantly see its right-click options as an interactive tooltip; click an option to execute it directly without right-clicking

@@ -130,6 +130,10 @@ const i18n = {
     'eyeCare.addColorInvalid': '无效的颜色值',
     'theme.defaultMode': '新页面默认为:深/浅',
     'eyeCare.defaultMode': '新页面默认为:深/浅',
+    'settings.defaultBgMode': '新页面默认深/浅模式',
+    'settings.modeNone': '不切换',
+    'settings.modeDark': '深色',
+    'settings.modeLight': '浅色',
     'settings.title': '设置',
     'settings.autoBgByName': '打开文档时使用同名图片作背景',
     'styleMemory.chip': '记忆模式',
@@ -285,6 +289,10 @@ const i18n = {
     'eyeCare.addColorInvalid': 'Invalid color value',
     'theme.defaultMode': 'Default mode for new pages: dark/light',
     'eyeCare.defaultMode': 'Default mode for new pages: dark/light',
+    'settings.defaultBgMode': 'Default dark/light mode for new pages',
+    'settings.modeNone': 'No switch',
+    'settings.modeDark': 'Dark',
+    'settings.modeLight': 'Light',
     'settings.title': 'Settings',
     'settings.autoBgByName': 'Use same-name image as background on document open',
     'styleMemory.chip': 'Memory Mode',
@@ -426,6 +434,8 @@ class SwiftSwitchPlugin extends Plugin {
       if (!this.settings.styleMemory && !this.settings.autoBgByName && newPath) {
         await this._applyDefaultBackground();
       }
+      // 兜底：延迟重新应用背景，避免 Obsidian 切换页面时重渲染覆盖注入的 CSS
+      setTimeout(() => { this.applyEyeCareColor(); }, 150);
       const popup = document.getElementById('ss-snippets-popup');
       if (popup && popup._ssRenderContent) {
         await new Promise(r => setTimeout(r, 200));
@@ -2275,10 +2285,9 @@ class SwiftSwitchPlugin extends Plugin {
     if (!profile) {
       const hasDefault = this.settings.defaultTheme || this.settings.defaultEyeCareColor || this.settings.defaultThemeMode || this.settings.defaultEyeCareMode;
       if (!hasDefault) {
+        // 无记忆且无默认：保持当前背景不变（不再清空），避免记忆模式下打开新页面背景消失
         if (this.settings.eyeCareColor) {
-          this.settings.eyeCareColor = '';
           this.applyEyeCareColor();
-          await this.saveSettings();
         }
         return;
       }
@@ -2378,10 +2387,9 @@ class SwiftSwitchPlugin extends Plugin {
       this.applyEyeCareColor();
       await this.saveSettings();
     } else if (!this.settings.styleMemory) {
+      // 未匹配到同名图片：保持当前背景不变（不再清空）
       if (this.settings.eyeCareColor) {
-        this.settings.eyeCareColor = '';
         this.applyEyeCareColor();
-        await this.saveSettings();
       }
     }
   }
@@ -2399,8 +2407,8 @@ class SwiftSwitchPlugin extends Plugin {
         this.applyEyeCareColor();
       }
     } else {
+      // 无默认背景时保持当前背景不变（不再无条件清空），避免点击图片后切换页面背景消失
       if (this.settings.eyeCareColor) {
-        this.settings.eyeCareColor = '';
         this.applyEyeCareColor();
       }
     }
@@ -2884,16 +2892,17 @@ class SwiftSwitchPlugin extends Plugin {
       });
       const buildDefaultThemeOpts = () => {
         const opts = [];
-        opts.push({ label: t('theme.setAsDefault'), action: async () => {
-          this.settings.defaultTheme = '';
-          await this.saveSettings();
-          new Notice(t('theme.setAsDefaultDone'));
-        }});
         if (this.settings.defaultTheme !== '') {
           opts.push({ label: t('theme.clearDefault'), action: async () => {
             this.settings.defaultTheme = '';
             await this.saveSettings();
             new Notice(t('theme.clearDefaultDone'));
+          }});
+        } else {
+          opts.push({ label: t('theme.setAsDefault'), action: async () => {
+            this.settings.defaultTheme = '';
+            await this.saveSettings();
+            new Notice(t('theme.setAsDefaultDone'));
           }});
         }
         const _dmOn = !!this.settings.defaultThemeMode;
@@ -2922,16 +2931,17 @@ class SwiftSwitchPlugin extends Plugin {
           item.addEventListener('click', async (ev) => { ev.stopPropagation(); menu.remove(); await action(); });
           menu.appendChild(item);
         };
-        mkItem(t('theme.setAsDefault'), async () => {
-          this.settings.defaultTheme = '';
-          await this.saveSettings();
-          new Notice(t('theme.setAsDefaultDone'));
-        });
         if (this.settings.defaultTheme !== '') {
           mkItem(t('theme.clearDefault'), async () => {
             this.settings.defaultTheme = '';
             await this.saveSettings();
             new Notice(t('theme.clearDefaultDone'));
+          });
+        } else {
+          mkItem(t('theme.setAsDefault'), async () => {
+            this.settings.defaultTheme = '';
+            await this.saveSettings();
+            new Notice(t('theme.setAsDefaultDone'));
           });
         }
         const mkToggle = (label, isOn, action) => {
@@ -3002,17 +3012,18 @@ class SwiftSwitchPlugin extends Plugin {
         });
         const buildThemeOpts = () => {
           const opts = [];
-          opts.push({ label: t('theme.setAsDefault'), action: async () => {
-            this.settings.defaultTheme = themeName;
-            await this.saveSettings();
-            new Notice(t('theme.setAsDefaultDone'));
-            await renderThemes();
-          }});
           if (this.settings.defaultTheme === themeName) {
             opts.push({ label: t('theme.clearDefault'), action: async () => {
               this.settings.defaultTheme = '';
               await this.saveSettings();
               new Notice(t('theme.clearDefaultDone'));
+              await renderThemes();
+            }});
+          } else {
+            opts.push({ label: t('theme.setAsDefault'), action: async () => {
+              this.settings.defaultTheme = themeName;
+              await this.saveSettings();
+              new Notice(t('theme.setAsDefaultDone'));
               await renderThemes();
             }});
           }
@@ -3065,17 +3076,18 @@ class SwiftSwitchPlugin extends Plugin {
             item.addEventListener('click', async (ev) => { ev.stopPropagation(); menu.remove(); await action(); });
             menu.appendChild(item);
           };
-          mkItem(t('theme.setAsDefault'), async () => {
-            this.settings.defaultTheme = themeName;
-            await this.saveSettings();
-            new Notice(t('theme.setAsDefaultDone'));
-            await renderThemes();
-          });
           if (this.settings.defaultTheme === themeName) {
             mkItem(t('theme.clearDefault'), async () => {
               this.settings.defaultTheme = '';
               await this.saveSettings();
               new Notice(t('theme.clearDefaultDone'));
+              await renderThemes();
+            });
+          } else {
+            mkItem(t('theme.setAsDefault'), async () => {
+              this.settings.defaultTheme = themeName;
+              await this.saveSettings();
+              new Notice(t('theme.setAsDefaultDone'));
               await renderThemes();
             });
           }
@@ -3506,12 +3518,6 @@ class SwiftSwitchPlugin extends Plugin {
               new Notice(t('eyeCare.imgRotated'));
             } catch (_e) { new Notice(t('eyeCare.imgRotateFailed')); }
           }});
-          opts.push({ label: t('eyeCare.setAsDefault'), action: async () => {
-            this.settings.defaultEyeCareColor = `__img_${idx}`;
-            await this.saveSettings();
-            new Notice(t('eyeCare.setAsDefaultDone'));
-            renderEyeCare();
-          }});
           if (this.settings.defaultEyeCareColor === `__img_${idx}`) {
             opts.push({ label: t('eyeCare.clearDefault'), action: async () => {
               this.settings.defaultEyeCareColor = '';
@@ -3519,16 +3525,15 @@ class SwiftSwitchPlugin extends Plugin {
               new Notice(t('eyeCare.clearDefaultDone'));
               renderEyeCare();
             }});
+          } else {
+            opts.push({ label: t('eyeCare.setAsDefault'), action: async () => {
+              this.settings.defaultEyeCareColor = `__img_${idx}`;
+              await this.saveSettings();
+              new Notice(t('eyeCare.setAsDefaultDone'));
+              renderEyeCare();
+            }});
           }
-          const _dmOn = !!this.settings.defaultEyeCareMode;
-          opts.push({ label: (_dmOn ? '✓ ' : '○ ') + t('eyeCare.defaultMode'), action: async () => {
-            if (this.settings.defaultEyeCareMode) {
-              this.settings.defaultEyeCareMode = '';
-            } else {
-              this.settings.defaultEyeCareMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
-            }
-            await this.saveSettings();
-          }});
+
           opts.push({ label: t('eyeCare.imgDelete'), action: async () => {
             try {
               if (isMobile) {
@@ -3638,17 +3643,18 @@ class SwiftSwitchPlugin extends Plugin {
               new Notice(t('eyeCare.imgRotated'));
             } catch (_e) { new Notice(t('eyeCare.imgRotateFailed')); }
           });
-          mkItem(t('eyeCare.setAsDefault'), async () => {
-            this.settings.defaultEyeCareColor = `__img_${idx}`;
-            await this.saveSettings();
-            new Notice(t('eyeCare.setAsDefaultDone'));
-            renderEyeCare();
-          });
           if (this.settings.defaultEyeCareColor === `__img_${idx}`) {
             mkItem(t('eyeCare.clearDefault'), async () => {
               this.settings.defaultEyeCareColor = '';
               await this.saveSettings();
               new Notice(t('eyeCare.clearDefaultDone'));
+              renderEyeCare();
+            });
+          } else {
+            mkItem(t('eyeCare.setAsDefault'), async () => {
+              this.settings.defaultEyeCareColor = `__img_${idx}`;
+              await this.saveSettings();
+              new Notice(t('eyeCare.setAsDefaultDone'));
               renderEyeCare();
             });
           }
@@ -3669,14 +3675,7 @@ class SwiftSwitchPlugin extends Plugin {
             item.addEventListener('click', async (ev) => { ev.stopPropagation(); menu.remove(); await action(); });
             menu.appendChild(item);
           };
-          mkToggle(t('eyeCare.defaultMode'), !!this.settings.defaultEyeCareMode, async () => {
-            if (this.settings.defaultEyeCareMode) {
-              this.settings.defaultEyeCareMode = '';
-            } else {
-              this.settings.defaultEyeCareMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
-            }
-            await this.saveSettings();
-          });
+
           mkItem(t('eyeCare.imgDelete'), async () => {
             try {
               if (isMobile) {
@@ -3747,17 +3746,18 @@ class SwiftSwitchPlugin extends Plugin {
         });
         const buildColorOpts = () => {
           const opts = [];
-          opts.push({ label: t('eyeCare.setAsDefault'), action: async () => {
-            this.settings.defaultEyeCareColor = `__customcolor_${cIdx}`;
-            await this.saveSettings();
-            new Notice(t('eyeCare.setAsDefaultDone'));
-            renderEyeCare();
-          }});
           if (this.settings.defaultEyeCareColor === `__customcolor_${cIdx}`) {
             opts.push({ label: t('eyeCare.clearDefault'), action: async () => {
               this.settings.defaultEyeCareColor = '';
               await this.saveSettings();
               new Notice(t('eyeCare.clearDefaultDone'));
+              renderEyeCare();
+            }});
+          } else {
+            opts.push({ label: t('eyeCare.setAsDefault'), action: async () => {
+              this.settings.defaultEyeCareColor = `__customcolor_${cIdx}`;
+              await this.saveSettings();
+              new Notice(t('eyeCare.setAsDefaultDone'));
               renderEyeCare();
             }});
           }
@@ -4576,12 +4576,10 @@ class SwiftSwitchPlugin extends Plugin {
       font-size:16px;cursor:pointer;user-select:none;opacity:0.6;transition:opacity 0.15s ease;
       margin-right:4px;
     `;
-    settingsIcon.addEventListener('mouseenter', () => { settingsIcon.style.opacity = '1'; });
-    settingsIcon.addEventListener('mouseleave', () => { settingsIcon.style.opacity = '0.6'; });
-    settingsIcon.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      const existingSettings = document.getElementById('ss-settings-popup');
-      if (existingSettings) { existingSettings.remove(); return; }
+    let _ssSettingsHoverTimer = null;
+    const _ssCloseSettings = () => { const sp = document.getElementById('ss-settings-popup'); if (sp) sp.remove(); };
+    const _ssOpenSettings = () => {
+      if (document.getElementById('ss-settings-popup')) return;
       const settingsPopup = document.createElement('div');
       settingsPopup.id = 'ss-settings-popup';
       settingsPopup.style.cssText = `
@@ -4617,11 +4615,45 @@ class SwiftSwitchPlugin extends Plugin {
         await this.saveSettings();
       });
 
-      document.body.appendChild(settingsPopup);
-      const closeSettings = (e) => {
-        if (!settingsPopup.contains(e.target) && e.target !== settingsIcon) { settingsPopup.remove(); document.removeEventListener('click', closeSettings); }
+      const modeRow = settingsPopup.createDiv();
+      modeRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;';
+      const modeLabel = modeRow.createEl('span', { text: t('settings.defaultBgMode') });
+      modeLabel.style.cssText = 'font-size:12px;color:var(--text-normal);';
+      const modeBtns = modeRow.createDiv();
+      modeBtns.style.cssText = 'display:flex;gap:4px;';
+      const modeOptions = [
+        { key: '', label: t('settings.modeNone') },
+        { key: 'dark', label: t('settings.modeDark') },
+        { key: 'light', label: t('settings.modeLight') },
+      ];
+      const renderModeBtns = () => {
+        modeBtns.innerHTML = '';
+        modeOptions.forEach(opt => {
+          const btn = modeBtns.createEl('span');
+          const active = this.settings.defaultEyeCareMode === opt.key;
+          btn.textContent = opt.label;
+          btn.style.cssText = `padding:2px 8px;border-radius:8px;font-size:11px;cursor:pointer;border:1px solid ${active ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};background:${active ? 'var(--interactive-accent)' : 'transparent'};color:${active ? '#fff' : 'var(--text-normal)'};user-select:none;`;
+          btn.addEventListener('click', async () => {
+            this.settings.defaultEyeCareMode = opt.key;
+            await this.saveSettings();
+            renderModeBtns();
+          });
+        });
       };
-      setTimeout(() => document.addEventListener('click', closeSettings), 10);
+      renderModeBtns();
+
+      document.body.appendChild(settingsPopup);
+      settingsPopup.addEventListener('mouseenter', () => { if (_ssSettingsHoverTimer) { clearTimeout(_ssSettingsHoverTimer); _ssSettingsHoverTimer = null; } });
+      settingsPopup.addEventListener('mouseleave', () => { _ssSettingsHoverTimer = setTimeout(_ssCloseSettings, 200); });
+    };
+    settingsIcon.addEventListener('mouseenter', () => {
+      settingsIcon.style.opacity = '1';
+      if (_ssSettingsHoverTimer) { clearTimeout(_ssSettingsHoverTimer); _ssSettingsHoverTimer = null; }
+      _ssOpenSettings();
+    });
+    settingsIcon.addEventListener('mouseleave', () => {
+      settingsIcon.style.opacity = '0.6';
+      _ssSettingsHoverTimer = setTimeout(_ssCloseSettings, 200);
     });
 
     const footerLabel = footer.createEl('span');
@@ -4942,12 +4974,6 @@ class SwiftSwitchPlugin extends Plugin {
     const buildSnippetOpts = () => {
       const opts = [];
       if (currentGroup === '__bg__') {
-        opts.push({ label: t('eyeCare.setAsDefault'), action: async () => {
-          this.settings.defaultEyeCareColor = '__snippet__' + snippetName;
-          await this.saveSettings();
-          new Notice(t('eyeCare.setAsDefaultDone'));
-          rerender();
-        }});
         if (this.settings.defaultEyeCareColor === '__snippet__' + snippetName) {
           opts.push({ label: t('eyeCare.clearDefault'), action: async () => {
             this.settings.defaultEyeCareColor = '';
@@ -4955,16 +4981,15 @@ class SwiftSwitchPlugin extends Plugin {
             new Notice(t('eyeCare.clearDefaultDone'));
             rerender();
           }});
+        } else {
+          opts.push({ label: t('eyeCare.setAsDefault'), action: async () => {
+            this.settings.defaultEyeCareColor = '__snippet__' + snippetName;
+            await this.saveSettings();
+            new Notice(t('eyeCare.setAsDefaultDone'));
+            rerender();
+          }});
         }
-        const _dmOn = !!this.settings.defaultEyeCareMode;
-        opts.push({ label: (_dmOn ? '✓ ' : '○ ') + t('eyeCare.defaultMode'), action: async () => {
-          if (this.settings.defaultEyeCareMode) {
-            this.settings.defaultEyeCareMode = '';
-          } else {
-            this.settings.defaultEyeCareMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
-          }
-          await this.saveSettings();
-        }});
+
       }
       opts.push({ label: t('context.copy'), action: async () => {
         try {
@@ -5101,17 +5126,18 @@ class SwiftSwitchPlugin extends Plugin {
 
       // 复制
       if (currentGroup === '__bg__') {
-        mkItem(t('eyeCare.setAsDefault'), async () => {
-          this.settings.defaultEyeCareColor = '__snippet__' + snippetName;
-          await this.saveSettings();
-          new Notice(t('eyeCare.setAsDefaultDone'));
-          rerender();
-        });
         if (this.settings.defaultEyeCareColor === '__snippet__' + snippetName) {
           mkItem(t('eyeCare.clearDefault'), async () => {
             this.settings.defaultEyeCareColor = '';
             await this.saveSettings();
             new Notice(t('eyeCare.clearDefaultDone'));
+            rerender();
+          });
+        } else {
+          mkItem(t('eyeCare.setAsDefault'), async () => {
+            this.settings.defaultEyeCareColor = '__snippet__' + snippetName;
+            await this.saveSettings();
+            new Notice(t('eyeCare.setAsDefaultDone'));
             rerender();
           });
         }
@@ -5132,14 +5158,7 @@ class SwiftSwitchPlugin extends Plugin {
           item.addEventListener('click', async () => { menu.remove(); await action(); });
           menu.appendChild(item);
         };
-        mkToggle(t('eyeCare.defaultMode'), !!this.settings.defaultEyeCareMode, async () => {
-          if (this.settings.defaultEyeCareMode) {
-            this.settings.defaultEyeCareMode = '';
-          } else {
-            this.settings.defaultEyeCareMode = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
-          }
-          await this.saveSettings();
-        });
+
       }
       mkItem(t('context.copy'), async () => {
         try {
