@@ -401,7 +401,7 @@ class SwiftSwitchPlugin extends Plugin {
     }
 
     // 字体功能
-    if (this.settings.activeFont || this.settings.fontColor) {
+    if (this.settings.activeFont || this.settings.fontColor || this.settings.fontLineHeight || (this.settings.fontOpacity ?? 1) < 1 || (this.settings.fontMarginL ?? 0) !== 0 || (this.settings.fontMarginR ?? 0) !== 0) {
       this.applyFontSettings();
     }
 
@@ -586,6 +586,19 @@ class SwiftSwitchPlugin extends Plugin {
     return { enabledSnippets, snippetFiles };
   }
 
+  _getAllSnippetFilesSync() {
+    try {
+      if (isMobile) return [];
+      const snippetsDir = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'snippets');
+      if (nodeFs.existsSync(snippetsDir)) {
+        return nodeFs.readdirSync(snippetsDir)
+          .filter(f => f.endsWith('.css') || f.endsWith('.js'))
+          .map(f => f.replace(/\.(css|js)$/, ''));
+      }
+    } catch (_e) {}
+    return [];
+  }
+
   // ─── 读取主题列表 ─────────────────────────────────────────────────────
   async getThemeInfo() {
     let currentTheme = '';
@@ -734,7 +747,7 @@ class SwiftSwitchPlugin extends Plugin {
       let imgUrl = '';
       try {
         if (isMobile) {
-          const vaultPath = _joinPath('.obsidian', 'plugins', 'SwiftSnippets', 'pic', finalResolvedUrl);
+          const vaultPath = _joinPath(this._getPluginVaultPath(), 'pic', finalResolvedUrl);
           if (this._cachedImgUrl && this._cachedImgKey === key) {
             imgUrl = this._cachedImgUrl;
           } else {
@@ -1021,7 +1034,7 @@ class SwiftSwitchPlugin extends Plugin {
   async _resolvePhoneImageAsync(resolvedUrl) {
     if (!isMobile) return resolvedUrl;
     const phonePath = 'phone/' + resolvedUrl;
-    const vaultPath = _joinPath('.obsidian', 'plugins', 'SwiftSnippets', 'pic', phonePath);
+    const vaultPath = _joinPath(this._getPluginVaultPath(), 'pic', phonePath);
     try {
       const exists = await this.app.vault.adapter.exists(vaultPath);
       return exists ? phonePath : resolvedUrl;
@@ -1031,13 +1044,24 @@ class SwiftSwitchPlugin extends Plugin {
   }
 
   _getPluginDir() {
-    if (this.app && this.app.vault && this.app.vault.adapter && this.app.vault.adapter.basePath) {
-      return _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'plugins', 'SwiftSnippets');
+    const basePath = this.app && this.app.vault && this.app.vault.adapter && this.app.vault.adapter.basePath;
+    if (basePath) {
+      if (this.manifest && this.manifest.dir) {
+        return _joinPath(basePath, this.manifest.dir);
+      }
+      return _joinPath(basePath, '.obsidian', 'plugins', (this.manifest && this.manifest.id) || 'swift-snippets');
     }
     if (this.manifest && this.manifest.dir) {
       return this.manifest.dir;
     }
     return __dirname;
+  }
+
+  _getPluginVaultPath() {
+    if (this.manifest && this.manifest.dir) {
+      return this.manifest.dir;
+    }
+    return _joinPath('.obsidian', 'plugins', (this.manifest && this.manifest.id) || 'swift-snippets');
   }
 
   _exportEyeCareSnippets() {
@@ -1226,7 +1250,7 @@ class SwiftSwitchPlugin extends Plugin {
     try {
       let files;
       if (isMobile) {
-        const picVaultPath = '.obsidian/plugins/SwiftSnippets/pic';
+        const picVaultPath = _joinPath(this._getPluginVaultPath(), 'pic');
         try { await this.app.vault.adapter.mkdir(picVaultPath); } catch (_e) {}
         const result = await this.app.vault.adapter.list(picVaultPath);
         const imgExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
@@ -2452,6 +2476,7 @@ class SwiftSwitchPlugin extends Plugin {
   }
 
   _attachSsChipHover(chip, buildOpts) {
+    if (isMobile) return;
     chip.addEventListener('mouseenter', () => {
       if (this._ssChipTooltipTimer) { clearTimeout(this._ssChipTooltipTimer); this._ssChipTooltipTimer = null; }
       this._showSsChipTooltip(chip, buildOpts());
@@ -2553,10 +2578,7 @@ class SwiftSwitchPlugin extends Plugin {
         const higherZ = document.querySelector('[style*="z-index:1000"], [style*="z-index: 1000"]');
         if (higherZ && !popup.contains(higherZ)) return;
         this.settings.popupPosition = { left: popup.style.left, top: popup.style.top };
-        const fontChips = popup.querySelector('[data-ss-font-chips]');
-        if (fontChips && fontChips.style.display !== 'none') {
-          this.settings.fontCollapsed = true;
-        }
+
         this.saveSettings();
         popup.remove(); overlay.remove(); resizeHandle.remove();
         const pv1 = document.getElementById('ss-img-preview'); if (pv1) pv1.remove();
@@ -2567,8 +2589,8 @@ class SwiftSwitchPlugin extends Plugin {
     const popup = document.createElement('div');
     popup.id = 'ss-snippets-popup';
     popup.style.cssText = isMobile
-      ? `position:fixed;background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--background-modifier-border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:10000;padding:12px 14px;width:92vw;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;`
-      : `position:fixed;background:rgba(var(--mono-rgb-0),0.75);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);border:1px solid rgba(255,255,255,0.12);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;padding:16px 20px;min-width:360px;min-height:200px;width:480px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;`;
+      ? `position:fixed;background:rgba(var(--mono-rgb-0),0.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--background-modifier-border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:10000;padding:10px 0;width:94vw;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;`
+      : `position:fixed;background:rgba(var(--mono-rgb-0),0.75);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);border:1px solid rgba(255,255,255,0.12);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;padding:10px 0;min-width:360px;min-height:200px;width:480px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;`;
     // 恢复保存的大小
     if (!isMobile && this.settings.popupSize) {
       popup.style.width = this.settings.popupSize.width + 'px';
@@ -2588,12 +2610,9 @@ class SwiftSwitchPlugin extends Plugin {
       });
     }
 
-    const scrollBody = popup.createDiv();
-    scrollBody.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;';
-
     // ── 头部 ──────────────────────────────────────────────────────────
-    const header = scrollBody.createDiv();
-    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:0;cursor:move;';
+    const header = popup.createDiv();
+    header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:0 12px;cursor:move;flex-shrink:0;';
 
     const leftHeader = header.createDiv();
     leftHeader.style.cssText = 'display:flex;align-items:center;gap:8px;';
@@ -2611,10 +2630,7 @@ class SwiftSwitchPlugin extends Plugin {
       await this.saveSettings();
       const prevLeft = popup.style.left;
       const prevTop = popup.style.top;
-      const fontChipsLang = popup.querySelector('[data-ss-font-chips]');
-      if (fontChipsLang && fontChipsLang.style.display !== 'none') {
-        this.settings.fontCollapsed = true;
-      }
+
       popup.remove(); overlay.remove(); resizeHandle.remove();
       const pv2 = document.getElementById('ss-img-preview'); if (pv2) pv2.remove();
       this.openSnippetsPopup(prevLeft, prevTop);
@@ -2646,172 +2662,118 @@ class SwiftSwitchPlugin extends Plugin {
       });
     }
 
-    const closeBtn = header.createEl('span');
-    closeBtn.textContent = '✕';
-    closeBtn.style.cssText = 'cursor:pointer;font-size:16px;color:var(--text-muted);padding:2px 6px;';
-    closeBtn.addEventListener('click', () => {
-      this.settings.popupPosition = { left: popup.style.left, top: popup.style.top };
-      const fontChips2 = popup.querySelector('[data-ss-font-chips]');
-      if (fontChips2 && fontChips2.style.display !== 'none') {
-        this.settings.fontCollapsed = true;
-      }
-      this.saveSettings();
-      popup.remove(); overlay.remove(); resizeHandle.remove();
-      const pv3 = document.getElementById('ss-img-preview'); if (pv3) pv3.remove();
+    // Spacer
+    const headerSpacer = header.createDiv();
+    headerSpacer.style.cssText = 'flex:1;';
+
+    // Memory mode chip (in header)
+    const _hdrMemChip = header.createEl('span');
+    const _hdrMemActive = this.settings.styleMemory;
+    _hdrMemChip.textContent = t('styleMemory.chip');
+    _hdrMemChip.title = t('styleMemory.hint');
+    _hdrMemChip.style.cssText = `
+      display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;cursor:pointer;
+      user-select:none;transition:all 0.2s ease;
+      border:1px solid ${_hdrMemActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
+      background:${_hdrMemActive ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)'};
+      color:${_hdrMemActive ? '#fff' : 'var(--text-muted)'};
+      ${_hdrMemActive ? 'box-shadow:0 0 6px rgba(var(--interactive-accent-rgb),0.4);' : ''}
+    `;
+    _hdrMemChip.addEventListener('click', async () => {
+      this.settings.styleMemory = !this.settings.styleMemory;
+      await this.saveSettings();
+      const on = this.settings.styleMemory;
+      _hdrMemChip.style.borderColor = on ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+      _hdrMemChip.style.background = on ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)';
+      _hdrMemChip.style.color = on ? '#fff' : 'var(--text-muted)';
+      _hdrMemChip.style.boxShadow = on ? '0 0 6px rgba(var(--interactive-accent-rgb),0.4)' : '';
+      new Notice(on ? t('styleMemory.on') : t('styleMemory.off'));
     });
 
-    // ── 拖拽弹窗 ──────────────────────────────────────────────────────
-    let isDraggingPopup = false, dragOffX = 0, dragOffY = 0;
-    header.addEventListener('mousedown', (e) => {
-      if (e.target === closeBtn || e.target === langSwitch) return;
-      isDraggingPopup = true;
-      const rect = popup.getBoundingClientRect();
-      dragOffX = e.clientX - Math.round(rect.left);
-      dragOffY = e.clientY - Math.round(rect.top);
-    });
-    document.addEventListener('mousemove', (e) => {
-      if (!isDraggingPopup) return;
-      popup.style.left = Math.round(e.clientX - dragOffX) + 'px';
-      popup.style.top = Math.round(e.clientY - dragOffY) + 'px';
-      updateResizeHandlePosition();
-    });
-    document.addEventListener('mouseup', () => {
-      if (isDraggingPopup) {
-        isDraggingPopup = false;
-        this.settings.popupPosition = { left: popup.style.left, top: popup.style.top };
-        this.saveSettings();
-      }
-    });
-
-    // ── 主题区域 ──────────────────────────────────────────────────────
-    const themeArea = scrollBody.createDiv();
-    themeArea.style.cssText = 'margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--background-modifier-border);';
-    if (isMobile) themeArea.style.display = 'none';
-
-    const renderThemes = async () => {
-      themeArea.empty();
-      let { currentTheme, themeDirs } = await this.getThemeInfo();
-
-      // 主题标签行 + 记忆模式 + 深浅模式开关
-      const themeHeaderRow = themeArea.createDiv();
-      themeHeaderRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;';
-
-      const themeLabel = themeHeaderRow.createEl('div', { text: t('theme.section') });
-      themeLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);';
-
-      const rightControls = themeHeaderRow.createDiv();
-      rightControls.style.cssText = 'display:flex;align-items:center;gap:6px;';
-
-      // 深浅模式切换开关
-      const isDark = document.body.classList.contains('theme-dark');
-
-      // 记忆模式 chip（深浅模式左边）
-      const memChip = rightControls.createEl('span');
-      const memActive = this.settings.styleMemory;
-      memChip.textContent = t('styleMemory.chip');
-      memChip.title = t('styleMemory.hint');
-      memChip.style.cssText = `
-        display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;cursor:pointer;
-        user-select:none;transition:all 0.2s ease;
-        border:1px solid ${memActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
-        background:${memActive ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)'};
-        color:${memActive ? '#fff' : 'var(--text-muted)'};
-        ${memActive ? 'box-shadow:0 0 6px rgba(var(--interactive-accent-rgb),0.4);' : ''}
-      `;
-      memChip.addEventListener('click', async () => {
-        this.settings.styleMemory = !this.settings.styleMemory;
-        await this.saveSettings();
-        const on = this.settings.styleMemory;
-        memChip.style.borderColor = on ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
-        memChip.style.background = on ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)';
-        memChip.style.color = on ? '#fff' : 'var(--text-muted)';
-        memChip.style.boxShadow = on ? '0 0 6px rgba(var(--interactive-accent-rgb),0.4)' : '';
-        new Notice(on ? t('styleMemory.on') : t('styleMemory.off'));
-      });
-
-      const modeSwitch = rightControls.createDiv();
-      modeSwitch.className = 'ss-mode-switch';
-      const hasFloatingBtn = !!this.settings.floatingButton;
-      modeSwitch.style.cssText = `
-        display:${hasFloatingBtn ? 'none' : 'inline-flex'};align-items:center;justify-content:center;
+    // Desktop: dark/light mode switch with pull cord (in header)
+    if (!isMobile) {
+      const _hdrIsDark = document.body.classList.contains('theme-dark');
+      const _hdrModeSwitch = header.createDiv();
+      _hdrModeSwitch.className = 'ss-mode-switch';
+      const _hdrHasFloat = !!this.settings.floatingButton;
+      _hdrModeSwitch.style.cssText = `
+        display:${_hdrHasFloat ? 'none' : 'inline-flex'};align-items:center;justify-content:center;
         width:18px;height:18px;border-radius:50%;cursor:pointer;user-select:none;
         transition:all 0.15s ease;touch-action:none;position:relative;
-        background:${isDark ? 'linear-gradient(135deg,#ff9a3c,#ffe44d)' : 'linear-gradient(135deg,#c8c8c8,#e8e8e8)'};
-        box-shadow:${isDark ? '0 2px 8px rgba(255,154,60,0.3)' : '0 2px 6px rgba(0,0,0,0.1)'};
+        background:${_hdrIsDark ? 'linear-gradient(135deg,#ff9a3c,#ffe44d)' : 'linear-gradient(135deg,#c8c8c8,#e8e8e8)'};
+        box-shadow:${_hdrIsDark ? '0 2px 8px rgba(255,154,60,0.3)' : '0 2px 6px rgba(0,0,0,0.1)'};
         opacity:0.85;
       `;
-      modeSwitch.addEventListener('mouseenter', () => { modeSwitch.style.opacity = '1'; });
-      modeSwitch.addEventListener('mouseleave', () => { modeSwitch.style.opacity = '0.85'; });
+      _hdrModeSwitch.addEventListener('mouseenter', () => { _hdrModeSwitch.style.opacity = '1'; });
+      _hdrModeSwitch.addEventListener('mouseleave', () => { _hdrModeSwitch.style.opacity = '0.85'; });
 
-      // 拉绳（绝对定位在按钮正下方）
-      const pullCordEl = modeSwitch.createEl('div');
-      pullCordEl.style.cssText = `
+      const _hdrPullCord = _hdrModeSwitch.createEl('div');
+      _hdrPullCord.style.cssText = `
         position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:2px;
         display:flex;flex-direction:column;align-items:center;cursor:ns-resize;
         user-select:none;opacity:0.6;transition:opacity 0.2s ease;
         touch-action:none;z-index:1;
       `;
-      const cordLine = pullCordEl.createEl('div');
-      cordLine.style.cssText = `
+      const _hdrCordLine = _hdrPullCord.createEl('div');
+      _hdrCordLine.style.cssText = `
         width:2px;height:14px;
         background:linear-gradient(to bottom,var(--text-faint),var(--text-muted));
         border-radius:1px;transition:height 0.15s ease;
       `;
-      const cordKnob = pullCordEl.createEl('div');
-      cordKnob.style.cssText = `
+      const _hdrCordKnob = _hdrPullCord.createEl('div');
+      _hdrCordKnob.style.cssText = `
         width:6px;height:6px;border-radius:50%;
         background:radial-gradient(circle at 35% 35%,var(--text-normal),var(--text-muted));
         box-shadow:0 1px 3px rgba(0,0,0,0.3);
         transition:transform 0.15s ease,box-shadow 0.15s ease;
       `;
-      pullCordEl.addEventListener('mouseenter', () => { pullCordEl.style.opacity = '1'; modeSwitch.style.opacity = '1'; });
-      pullCordEl.addEventListener('mouseleave', () => { if (!pullDragging) pullCordEl.style.opacity = '0.6'; });
+      _hdrPullCord.addEventListener('mouseenter', () => { _hdrPullCord.style.opacity = '1'; _hdrModeSwitch.style.opacity = '1'; });
+      _hdrPullCord.addEventListener('mouseleave', () => { if (!_hdrPullDragging) _hdrPullCord.style.opacity = '0.6'; });
 
-      let pullDragging = false;
-      let pullStartY = 0;
-      const pullThreshold = 20;
-      pullCordEl.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        pullDragging = true;
-        pullStartY = e.clientY;
-        cordLine.style.transition = 'none';
-        cordKnob.style.transition = 'none';
+      let _hdrPullDragging = false;
+      let _hdrPullStartY = 0;
+      const _hdrPullThreshold = 20;
+      _hdrPullCord.addEventListener('mousedown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        _hdrPullDragging = true; _hdrPullStartY = e.clientY;
+        _hdrCordLine.style.transition = 'none'; _hdrCordKnob.style.transition = 'none';
       });
-      const onPopupPullMove = (e) => {
-        if (!pullDragging) return;
+      const _hdrOnPullMove = (e) => {
+        if (!_hdrPullDragging) return;
         e.preventDefault();
-        const dy = e.clientY - pullStartY;
-        cordLine.style.height = Math.max(8, 14 + dy) + 'px';
-        const scale = 1 + Math.min(dy / pullThreshold, 0.4);
-        cordKnob.style.transform = `scale(${scale})`;
-        cordKnob.style.boxShadow = dy > pullThreshold * 0.6
+        const dy = e.clientY - _hdrPullStartY;
+        _hdrCordLine.style.height = Math.max(8, 14 + dy) + 'px';
+        const scale = 1 + Math.min(dy / _hdrPullThreshold, 0.4);
+        _hdrCordKnob.style.transform = `scale(${scale})`;
+        _hdrCordKnob.style.boxShadow = dy > _hdrPullThreshold * 0.6
           ? '0 2px 6px rgba(0,0,0,0.4), 0 0 4px var(--interactive-accent)'
           : '0 1px 3px rgba(0,0,0,0.3)';
       };
-      const onPopupPullEnd = async (e) => {
-        if (!pullDragging) return;
-        pullDragging = false;
-        const dy = e.clientY - pullStartY;
-        cordLine.style.transition = 'height 0.3s cubic-bezier(0.34,1.56,0.64,1)';
-        cordKnob.style.transition = 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1)';
-        cordLine.style.height = '14px';
-        cordKnob.style.transform = 'scale(1)';
-        cordKnob.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
-        if (dy > pullThreshold) {
-          cordKnob.style.background = 'radial-gradient(circle at 35% 35%,var(--interactive-accent),var(--text-muted))';
+      const _hdrOnPullEnd = async (e) => {
+        if (!_hdrPullDragging) return;
+        _hdrPullDragging = false;
+        const dy = e.clientY - _hdrPullStartY;
+        _hdrCordLine.style.transition = 'height 0.3s cubic-bezier(0.34,1.56,0.64,1)';
+        _hdrCordKnob.style.transition = 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1)';
+        _hdrCordLine.style.height = '14px';
+        _hdrCordKnob.style.transform = 'scale(1)';
+        _hdrCordKnob.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+        if (dy > _hdrPullThreshold) {
+          _hdrCordKnob.style.background = 'radial-gradient(circle at 35% 35%,var(--interactive-accent),var(--text-muted))';
           setTimeout(() => {
-            cordKnob.style.background = 'radial-gradient(circle at 35% 35%,var(--text-normal),var(--text-muted))';
+            _hdrCordKnob.style.background = 'radial-gradient(circle at 35% 35%,var(--text-normal),var(--text-muted))';
           }, 400);
           await this.toggleMode();
-          renderThemes();
+          const nowDark = document.body.classList.contains('theme-dark');
+          _hdrModeSwitch.style.background = nowDark ? 'linear-gradient(135deg,#ff9a3c,#ffe44d)' : 'linear-gradient(135deg,#c8c8c8,#e8e8e8)';
+          _hdrModeSwitch.style.boxShadow = nowDark ? '0 2px 8px rgba(255,154,60,0.3)' : '0 2px 6px rgba(0,0,0,0.1)';
+          if (typeof renderThemes === 'function') await renderThemes();
         }
       };
-      document.addEventListener('mousemove', onPopupPullMove);
-      document.addEventListener('mouseup', onPopupPullEnd);
+      document.addEventListener('mousemove', _hdrOnPullMove);
+      document.addEventListener('mouseup', _hdrOnPullEnd);
 
-      // 点击按钮：显示/隐藏悬浮按钮
-      modeSwitch.addEventListener('click', async () => {
+      _hdrModeSwitch.addEventListener('click', async () => {
         if (this.settings.floatingButton) {
           const existing = document.getElementById('ss-floating-button');
           if (existing) {
@@ -2825,7 +2787,7 @@ class SwiftSwitchPlugin extends Plugin {
           }
           this.settings.floatingButton = null;
           await this.saveSettings();
-          modeSwitch.style.display = 'inline-flex';
+          _hdrModeSwitch.style.display = 'inline-flex';
         } else {
           const popupEl = document.getElementById('ss-snippets-popup');
           let fbX = window.innerWidth - 40;
@@ -2841,9 +2803,100 @@ class SwiftSwitchPlugin extends Plugin {
           };
           await this.saveSettings();
           this.createFloatingButton();
-          modeSwitch.style.display = 'none';
+          _hdrModeSwitch.style.display = 'none';
         }
       });
+    }
+
+    const closeBtn = header.createEl('span');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'cursor:pointer;font-size:16px;color:var(--text-muted);padding:2px 6px;';
+    closeBtn.addEventListener('click', () => {
+      this.settings.popupPosition = { left: popup.style.left, top: popup.style.top };
+
+      this.saveSettings();
+      popup.remove(); overlay.remove(); resizeHandle.remove();
+      const pv3 = document.getElementById('ss-img-preview'); if (pv3) pv3.remove();
+    });
+
+    // ── 拖拽弹窗 ──────────────────────────────────────────────────────
+    let isDraggingPopup = false, dragOffX = 0, dragOffY = 0;
+    const startDrag = (clientX, clientY) => {
+      isDraggingPopup = true;
+      const rect = popup.getBoundingClientRect();
+      dragOffX = clientX - Math.round(rect.left);
+      dragOffY = clientY - Math.round(rect.top);
+    };
+    const moveDrag = (clientX, clientY) => {
+      if (!isDraggingPopup) return;
+      popup.style.left = Math.round(clientX - dragOffX) + 'px';
+      popup.style.top = Math.round(clientY - dragOffY) + 'px';
+      updateResizeHandlePosition();
+    };
+    const endDrag = () => {
+      if (isDraggingPopup) {
+        isDraggingPopup = false;
+        this.settings.popupPosition = { left: popup.style.left, top: popup.style.top };
+        this.saveSettings();
+      }
+    };
+
+    header.addEventListener('mousedown', (e) => {
+      if (e.target === closeBtn || e.target === langSwitch || e.target === _hdrMemChip || e.target.closest('.ss-mode-switch')) return;
+      startDrag(e.clientX, e.clientY);
+    });
+    document.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
+    document.addEventListener('mouseup', () => endDrag());
+    header.addEventListener('touchstart', (e) => {
+      if (e.target === closeBtn || e.target === langSwitch || e.target === _hdrMemChip || e.target.closest('.ss-mode-switch')) return;
+      const t = e.touches[0];
+      startDrag(t.clientX, t.clientY);
+    }, { passive: true });
+    document.addEventListener('touchmove', (e) => {
+      if (!isDraggingPopup) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      moveDrag(t.clientX, t.clientY);
+    }, { passive: false });
+    document.addEventListener('touchend', () => endDrag());
+
+
+    // ── 状态栏（On now + search）──────────────────────────────────────
+    const stateBar = popup.createDiv();
+    stateBar.style.cssText = 'flex-shrink:0;display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--background-modifier-border);background:rgba(var(--mono-rgb-0),0.3);';
+    if (isMobile) stateBar.style.flexWrap = 'wrap';
+    const stateLabel = stateBar.createEl('span');
+    stateLabel.textContent = 'On now';
+    stateLabel.style.cssText = 'font-size:11px;color:var(--text-muted);white-space:nowrap;';
+    const stateList = stateBar.createDiv();
+    stateList.style.cssText = 'flex:1;display:flex;flex-wrap:wrap;gap:4px;min-height:20px;';
+    const searchInput = stateBar.createEl('input', { type: 'search' });
+    searchInput.placeholder = 'Search...';
+    searchInput.style.cssText = 'border:1px solid var(--background-modifier-border);background:var(--background-primary);color:var(--text-normal);border-radius:6px;padding:3px 8px;width:140px;font-size:12px;flex-shrink:0;';
+    if (isMobile) searchInput.style.width = '100%';
+
+    // ── 主体（nav + main）────────────────────────────────────────────
+    const body = popup.createDiv();
+    body.style.cssText = isMobile
+      ? 'flex:1;display:flex;flex-direction:column;min-height:0;'
+      : 'flex:1;display:flex;min-height:0;';
+    const nav = body.createDiv();
+    nav.style.cssText = isMobile
+      ? 'flex:none;border-bottom:1px solid var(--background-modifier-border);display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:6px;overflow:visible;'
+      : 'width:170px;flex:none;border-right:1px solid var(--background-modifier-border);padding:6px;overflow-y:auto;';
+    const main = body.createDiv();
+    main.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 12px;min-width:0;';
+
+    // ── 主题区域 ──────────────────────────────────────────────────────
+    const themeArea = main.createDiv();
+    themeArea.style.cssText = 'margin-bottom:12px;padding-bottom:10px;';
+
+    const renderThemes = async () => {
+      themeArea.empty();
+      let { currentTheme, themeDirs } = await this.getThemeInfo();
+
+      const themeLabel = themeArea.createEl('div', { text: t('theme.section') });
+      themeLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);margin-bottom:6px;';
 
       if (themeDirs.length === 0) {
         const hint = themeArea.createEl('span', { text: t('theme.noThemes') });
@@ -3213,7 +3266,7 @@ class SwiftSwitchPlugin extends Plugin {
     renderThemes();
 
     // ── 背景分组 ──────────────────────────────────────────────────
-    const eyeCareArea = scrollBody.createDiv();
+    const eyeCareArea = main.createDiv();
     eyeCareArea.style.cssText = 'margin-bottom:12px;';
 
     const BG_GROUP_KEY = '__bg__';
@@ -3248,7 +3301,7 @@ class SwiftSwitchPlugin extends Plugin {
       });
       helpEl.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (isMobile) { new Notice('pic: .obsidian/plugins/SwiftSnippets/pic/'); return; }
+        if (isMobile) { new Notice('pic: ' + _joinPath(this._getPluginVaultPath(), 'pic') + '/'); return; }
         try {
           const picDir = _joinPath(this._getPluginDir(), 'pic');
           if (!nodeFs.existsSync(picDir)) {
@@ -3468,14 +3521,14 @@ class SwiftSwitchPlugin extends Plugin {
               if (isMobile) {
                 if (img.paired) {
                   const ext = img.url.substring(img.url.lastIndexOf('.'));
-                  const picBase = '.obsidian/plugins/SwiftSnippets/pic/';
+                  const picBase = _joinPath(this._getPluginVaultPath(), 'pic') + '/';
                   try { await this.app.vault.adapter.rename(picBase + img.url, picBase + newName + '-light' + ext); } catch (_e) {}
                   try { await this.app.vault.adapter.rename(picBase + img.urlDark, picBase + newName + '-dark' + ext); } catch (_e) {}
                   img.url = newName + '-light' + ext;
                   img.urlDark = newName + '-dark' + ext;
                   img.label = newName;
                 } else {
-                  const picBase = '.obsidian/plugins/SwiftSnippets/pic/';
+                  const picBase = _joinPath(this._getPluginVaultPath(), 'pic') + '/';
                   try { await this.app.vault.adapter.rename(picBase + img.url, picBase + newName); img.url = newName; img.label = newName; } catch (_e) {}
                 }
               } else {
@@ -3538,10 +3591,10 @@ class SwiftSwitchPlugin extends Plugin {
             try {
               if (isMobile) {
                 if (img.paired) {
-                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.url); } catch (_e) {}
-                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.urlDark); } catch (_e) {}
+                  try { await this.app.vault.adapter.remove(_joinPath(this._getPluginVaultPath(), 'pic', img.url)); } catch (_e) {}
+                  try { await this.app.vault.adapter.remove(_joinPath(this._getPluginVaultPath(), 'pic', img.urlDark)); } catch (_e) {}
                 } else {
-                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.url); } catch (_e) {}
+                  try { await this.app.vault.adapter.remove(_joinPath(this._getPluginVaultPath(), 'pic', img.url)); } catch (_e) {}
                 }
               } else {
               if (img.paired) {
@@ -3593,14 +3646,14 @@ class SwiftSwitchPlugin extends Plugin {
               if (isMobile) {
                 if (img.paired) {
                   const ext = img.url.substring(img.url.lastIndexOf('.'));
-                  const picBase = '.obsidian/plugins/SwiftSnippets/pic/';
+                  const picBase = _joinPath(this._getPluginVaultPath(), 'pic') + '/';
                   try { await this.app.vault.adapter.rename(picBase + img.url, picBase + newName + '-light' + ext); } catch (_e) {}
                   try { await this.app.vault.adapter.rename(picBase + img.urlDark, picBase + newName + '-dark' + ext); } catch (_e) {}
                   img.url = newName + '-light' + ext;
                   img.urlDark = newName + '-dark' + ext;
                   img.label = newName;
                 } else {
-                  const picBase = '.obsidian/plugins/SwiftSnippets/pic/';
+                  const picBase = _joinPath(this._getPluginVaultPath(), 'pic') + '/';
                   try { await this.app.vault.adapter.rename(picBase + img.url, picBase + newName); img.url = newName; img.label = newName; } catch (_e) {}
                 }
               } else {
@@ -3680,10 +3733,10 @@ class SwiftSwitchPlugin extends Plugin {
             try {
               if (isMobile) {
                 if (img.paired) {
-                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.url); } catch (_e) {}
-                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.urlDark); } catch (_e) {}
+                  try { await this.app.vault.adapter.remove(_joinPath(this._getPluginVaultPath(), 'pic', img.url)); } catch (_e) {}
+                  try { await this.app.vault.adapter.remove(_joinPath(this._getPluginVaultPath(), 'pic', img.urlDark)); } catch (_e) {}
                 } else {
-                  try { await this.app.vault.adapter.remove('.obsidian/plugins/SwiftSnippets/pic/' + img.url); } catch (_e) {}
+                  try { await this.app.vault.adapter.remove(_joinPath(this._getPluginVaultPath(), 'pic', img.url)); } catch (_e) {}
                 }
               } else {
               if (img.paired) {
@@ -3732,7 +3785,24 @@ class SwiftSwitchPlugin extends Plugin {
           chip.style.background = active ? 'var(--interactive-accent)' : 'var(--background-primary)';
           chip.style.color = active ? '#fff' : 'var(--text-normal)';
         };
+        let _colorPreviewing = false;
+        const _origEyeCareColor = this.settings.eyeCareColor;
+        if (!isMobile) {
+        chip.addEventListener('mouseenter', async () => {
+          if (this.settings.eyeCareColor === `__customcolor_${cIdx}`) return;
+          _colorPreviewing = true;
+          this.settings.eyeCareColor = `__customcolor_${cIdx}`;
+          this.applyEyeCareColor();
+        });
+        chip.addEventListener('mouseleave', async () => {
+          if (!_colorPreviewing) return;
+          _colorPreviewing = false;
+          this.settings.eyeCareColor = _origEyeCareColor;
+          this.applyEyeCareColor();
+        });
+        }
         chip.addEventListener('click', async () => {
+          _colorPreviewing = false;
           if (this.settings.eyeCareColor === `__customcolor_${cIdx}`) {
             this.settings.eyeCareColor = '';
           } else {
@@ -3902,7 +3972,8 @@ class SwiftSwitchPlugin extends Plugin {
     renderEyeCare();
 
     // ── 内容区域 ──────────────────────────────────────────────────────
-    const contentArea = scrollBody.createDiv();
+    const _ssSpecialIds = ['theme', 'bg', 'font', 'fontStyle'];
+    const contentArea = main.createDiv();
     contentArea.style.cssText = 'min-height:60px;';
 
     // 拖拽状态（使用实例属性，避免闭包传值问题）
@@ -3931,30 +4002,36 @@ class SwiftSwitchPlugin extends Plugin {
 
       const isEnabled = (name) => enabledSnippets.includes(name);
 
+      const _q = searchInput.value.trim().toLowerCase();
+      const _isGroupMode = !_ssSpecialIds.includes(_ssCur);
+
       // ── 渲染各分组 ────────────────────────────────────────────────
       const bgGroupName = '__bg__';
       const orderedGroups = this.settings.groupOrder.filter(g => this.settings.groups[g] && g !== bgGroupName);
 
       for (const gName of orderedGroups) {
+        if (_isGroupMode && !_q && _ssCur !== gName) continue;
         const members = this.settings.groups[gName];
         if (!members) continue;
+        const _filtered = _q ? members.filter(m => m.toLowerCase().includes(_q)) : members;
+        if (_q && _filtered.length === 0) continue;
 
         const isCollapsed = this.settings.collapsedGroups[gName] || false;
 
         const groupEl = contentArea.createDiv();
-        groupEl.style.cssText = 'margin-bottom:10px;';
+        groupEl.style.cssText = 'margin-bottom:20px;';
         groupEl.setAttribute('data-group', gName);
 
         // 分组头
         const groupHeader = groupEl.createDiv();
-        groupHeader.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;user-select:none;';
+        groupHeader.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:8px;user-select:none;';
 
         const collapseIcon = groupHeader.createEl('span');
         collapseIcon.textContent = isCollapsed ? '▶' : '▼';
         collapseIcon.style.cssText = 'font-size:10px;color:var(--text-muted);cursor:pointer;transition:transform 0.15s ease;';
 
         const groupLabel = groupHeader.createEl('span');
-        groupLabel.textContent = gName + ' (' + members.length + ')';
+        groupLabel.textContent = gName + ' (' + _filtered.length + ')';
         groupLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);cursor:pointer;';
 
         const isExclusive = this.settings.exclusiveGroups && this.settings.exclusiveGroups.includes(gName);
@@ -3990,10 +4067,11 @@ class SwiftSwitchPlugin extends Plugin {
         // 折叠/展开
         const chipsContainer = groupEl.createDiv();
         chipsContainer.className = 'ss-group-chips';
-        chipsContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:4px;border-radius:6px;border:1px dashed transparent;transition:border-color 0.15s ease;';
+        chipsContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:8px;border-radius:6px;border:1px dashed transparent;transition:border-color 0.15s ease;';
         chipsContainer.style.display = isCollapsed ? 'none' : 'flex';
 
-        const toggleCollapse = async () => {
+        const toggleCollapse = async (e) => {
+          if (e) e.stopPropagation();
           const collapsed = !this.settings.collapsedGroups[gName];
           this.settings.collapsedGroups[gName] = collapsed;
           await this.saveSettings();
@@ -4025,23 +4103,26 @@ class SwiftSwitchPlugin extends Plugin {
           if (sourceGroup === '__bg__') renderEyeCare();
         });
 
-        members.forEach(snippetName => {
+        _filtered.forEach(snippetName => {
           this._createChip(chipsContainer, snippetName, isEnabled(snippetName), gName, renderContent);
         });
       }
 
       // ── 未分组 snippets ───────────────────────────────────────────
+      if (_q || !_isGroupMode || _ssCur === '__ungrouped__') {
       const groupedSnippets = new Set();
       for (const members of Object.values(this.settings.groups)) {
         members.forEach(s => groupedSnippets.add(s));
       }
       const ungrouped = snippetFiles.filter(n => !groupedSnippets.has(n));
 
-      if (ungrouped.length > 0) {
+      const _ungroupedFiltered = _q ? ungrouped.filter(n => n.toLowerCase().includes(_q)) : ungrouped;
+
+      if (_ungroupedFiltered.length > 0) {
         const isCollapsed = this.settings.collapsedGroups['__ungrouped__'] || false;
 
         const groupEl = contentArea.createDiv();
-        groupEl.style.cssText = 'margin-bottom:10px;';
+        groupEl.style.cssText = 'margin-bottom:16px;';
 
         const groupHeader = groupEl.createDiv();
         groupHeader.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;user-select:none;';
@@ -4051,15 +4132,16 @@ class SwiftSwitchPlugin extends Plugin {
         collapseIcon.style.cssText = 'font-size:10px;color:var(--text-muted);cursor:pointer;';
 
         const groupLabel = groupHeader.createEl('span');
-        groupLabel.textContent = t('group.ungrouped') + ' (' + ungrouped.length + ')';
+        groupLabel.textContent = t('group.ungrouped') + ' (' + _ungroupedFiltered.length + ')';
         groupLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-muted);cursor:pointer;';
 
         const chipsContainer = groupEl.createDiv();
         chipsContainer.className = 'ss-group-chips';
-        chipsContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:4px;border-radius:6px;border:1px dashed transparent;transition:border-color 0.15s ease;';
+        chipsContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:8px;border-radius:6px;border:1px dashed transparent;transition:border-color 0.15s ease;';
         chipsContainer.style.display = isCollapsed ? 'none' : 'flex';
 
-        const toggleCollapse = async () => {
+        const toggleCollapse = async (e) => {
+          if (e) e.stopPropagation();
           const collapsed = !this.settings.collapsedGroups['__ungrouped__'];
           this.settings.collapsedGroups['__ungrouped__'] = collapsed;
           await this.saveSettings();
@@ -4089,10 +4171,19 @@ class SwiftSwitchPlugin extends Plugin {
           if (srcGroup === '__bg__') renderEyeCare();
         });
 
-        ungrouped.forEach(snippetName => {
+        _ungroupedFiltered.forEach(snippetName => {
           this._createChip(chipsContainer, snippetName, isEnabled(snippetName), null, renderContent);
         });
       }
+      } // end if (_q || !_isGroupMode || _ssCur === '__ungrouped__')
+
+      if (_q && contentArea.children.length === 0) {
+        const noMatch = contentArea.createEl('span');
+        noMatch.textContent = 'No snippet matches "' + _q + '"';
+        noMatch.style.cssText = 'font-size:12px;color:var(--text-muted);';
+      }
+
+      if (_q) return;
 
       // ── 添加 Snippet 按钮 ─────────────────────────────────────────
       const addRow = contentArea.createDiv();
@@ -4156,19 +4247,14 @@ class SwiftSwitchPlugin extends Plugin {
       setTimeout(() => document.addEventListener('click', closeMenu), 10);
     });
 
-    renderContent();
 
     // ── 字体区域（手机端隐藏） ──────────────────────────────────────────────
-    const fontArea = scrollBody.createDiv();
+    const fontArea = main.createDiv();
     fontArea.style.cssText = 'margin-top:8px;';
 
     const fontHeader = fontArea.createDiv();
     fontHeader.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;user-select:none;';
 
-    const fontCollapseIcon = fontHeader.createEl('span');
-    const isFontCollapsed = this.settings.fontCollapsed ?? true;
-    fontCollapseIcon.textContent = isFontCollapsed ? '▶' : '▼';
-    fontCollapseIcon.style.cssText = 'font-size:10px;color:var(--text-muted);cursor:pointer;transition:transform 0.15s ease;';
 
     const fontLabel = fontHeader.createEl('span', { text: t('font.section') });
     fontLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);cursor:pointer;';
@@ -4243,9 +4329,9 @@ class SwiftSwitchPlugin extends Plugin {
 
     const fontChipsContainer = fontArea.createDiv();
     fontChipsContainer.setAttribute('data-ss-font-chips', '');
-    fontChipsContainer.style.cssText = isMobile ? 'display:none;' : `display:${isFontCollapsed ? 'none' : 'flex'};flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;padding:4px;`;
+    fontChipsContainer.style.cssText = isMobile ? 'display:none;' : 'display:flex;flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;padding:4px;';
 
-    const fontStyleArea = scrollBody.createDiv();
+    const fontStyleArea = main.createDiv();
     fontStyleArea.style.cssText = 'margin-top:4px;';
 
     const fontStyleHeader = fontStyleArea.createDiv();
@@ -4412,24 +4498,26 @@ class SwiftSwitchPlugin extends Plugin {
 
     const renderFontSettings = () => {
       fontSettingsPanel.innerHTML = '';
-      if (!this.settings.fontColor && this.settings.fontOpacity >= 1 && !this.settings.fontLineHeight && !this.settings.fontMarginL && !this.settings.fontMarginR) {
-        fontStyleArea.style.display = 'none';
-        return;
-      }
+
       fontStyleArea.style.display = 'block';
       fontSettingsPanel.style.display = 'block';
-      const row1 = fontSettingsPanel.createDiv();
-      row1.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
 
       const mkLabel = (text) => {
         const el = document.createElement('span');
         el.textContent = text;
-        el.style.cssText = 'font-size:10px;color:var(--text-muted);white-space:nowrap;';
+        el.style.cssText = 'font-size:10px;color:var(--text-muted);white-space:nowrap;min-width:60px;';
         return el;
       };
 
-      row1.appendChild(mkLabel(t('font.color')));
-      const colorInput = row1.createEl('input', { type: 'color' });
+      const mkRow = () => {
+        const r = fontSettingsPanel.createDiv();
+        r.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:8px;';
+        return r;
+      };
+
+      const rColor = mkRow();
+      rColor.appendChild(mkLabel(t('font.color')));
+      const colorInput = rColor.createEl('input', { type: 'color' });
       colorInput.value = this.settings.fontColor || '#ffffff';
       colorInput.style.cssText = 'width:28px;height:22px;padding:0;cursor:pointer;';
       colorInput.addEventListener('input', async () => {
@@ -4437,12 +4525,22 @@ class SwiftSwitchPlugin extends Plugin {
         this.applyFontSettings();
         await this.saveSettings();
       });
+      const colorDefaultBtn = rColor.createEl('span');
+      colorDefaultBtn.textContent = t('theme.default');
+      colorDefaultBtn.style.cssText = 'font-size:10px;padding:1px 6px;border-radius:8px;cursor:pointer;border:1px solid var(--background-modifier-border);color:var(--text-muted);user-select:none;';
+      colorDefaultBtn.addEventListener('click', async () => {
+        this.settings.fontColor = '';
+        this.applyFontSettings();
+        await this.saveSettings();
+        renderFontSettings();
+      });
 
-      row1.appendChild(mkLabel(t('font.opacity')));
-      const opSlider = row1.createEl('input', { type: 'range' });
+      const rOp = mkRow();
+      rOp.appendChild(mkLabel(t('font.opacity')));
+      const opSlider = rOp.createEl('input', { type: 'range' });
       opSlider.min = '10'; opSlider.max = '100'; opSlider.value = String(Math.round((this.settings.fontOpacity ?? 1) * 100));
-      opSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
-      const opVal = row1.createEl('span', { text: Math.round((this.settings.fontOpacity ?? 1) * 100) + '%' });
+      opSlider.style.cssText = 'flex:1;cursor:pointer;height:4px;min-width:80px;';
+      const opVal = rOp.createEl('span', { text: Math.round((this.settings.fontOpacity ?? 1) * 100) + '%' });
       opVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
       opSlider.addEventListener('input', async () => {
         const v = parseInt(opSlider.value) / 100;
@@ -4452,11 +4550,12 @@ class SwiftSwitchPlugin extends Plugin {
         await this.saveSettings();
       });
 
-      row1.appendChild(mkLabel(t('font.lineHeight')));
-      const lhSlider = row1.createEl('input', { type: 'range' });
+      const rLh = mkRow();
+      rLh.appendChild(mkLabel(t('font.lineHeight')));
+      const lhSlider = rLh.createEl('input', { type: 'range' });
       lhSlider.min = '10'; lhSlider.max = '30'; lhSlider.step = '1'; lhSlider.value = String(Math.round((this.settings.fontLineHeight ?? 1.5) * 10));
-      lhSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
-      const lhVal = row1.createEl('span', { text: (this.settings.fontLineHeight ?? 0) > 0 ? (this.settings.fontLineHeight).toFixed(1) : '-' });
+      lhSlider.style.cssText = 'flex:1;cursor:pointer;height:4px;min-width:80px;';
+      const lhVal = rLh.createEl('span', { text: (this.settings.fontLineHeight ?? 0) > 0 ? (this.settings.fontLineHeight).toFixed(1) : '-' });
       lhVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:22px;';
       lhSlider.addEventListener('input', async () => {
         const v = parseInt(lhSlider.value) / 10;
@@ -4466,14 +4565,12 @@ class SwiftSwitchPlugin extends Plugin {
         await this.saveSettings();
       });
 
-      const row2 = fontSettingsPanel.createDiv();
-      row2.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;';
-
-      row2.appendChild(mkLabel(t('font.marginL')));
-      const mlSlider = row2.createEl('input', { type: 'range' });
+      const rMl = mkRow();
+      rMl.appendChild(mkLabel(t('font.marginL')));
+      const mlSlider = rMl.createEl('input', { type: 'range' });
       mlSlider.min = '-40'; mlSlider.max = '80'; mlSlider.value = String(this.settings.fontMarginL ?? 0);
-      mlSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
-      const mlVal = row2.createEl('span', { text: (this.settings.fontMarginL ?? 0) + 'px' });
+      mlSlider.style.cssText = 'flex:1;cursor:pointer;height:4px;min-width:80px;';
+      const mlVal = rMl.createEl('span', { text: (this.settings.fontMarginL ?? 0) + 'px' });
       mlVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
       mlSlider.addEventListener('input', async () => {
         const v = parseInt(mlSlider.value);
@@ -4483,11 +4580,12 @@ class SwiftSwitchPlugin extends Plugin {
         await this.saveSettings();
       });
 
-      row2.appendChild(mkLabel(t('font.marginR')));
-      const mrSlider = row2.createEl('input', { type: 'range' });
+      const rMr = mkRow();
+      rMr.appendChild(mkLabel(t('font.marginR')));
+      const mrSlider = rMr.createEl('input', { type: 'range' });
       mrSlider.min = '-40'; mrSlider.max = '80'; mrSlider.value = String(this.settings.fontMarginR ?? 0);
-      mrSlider.style.cssText = 'width:60px;cursor:pointer;height:4px;';
-      const mrVal = row2.createEl('span', { text: (this.settings.fontMarginR ?? 0) + 'px' });
+      mrSlider.style.cssText = 'flex:1;cursor:pointer;height:4px;min-width:80px;';
+      const mrVal = rMr.createEl('span', { text: (this.settings.fontMarginR ?? 0) + 'px' });
       mrVal.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:28px;';
       mrSlider.addEventListener('input', async () => {
         const v = parseInt(mrSlider.value);
@@ -4497,12 +4595,13 @@ class SwiftSwitchPlugin extends Plugin {
         await this.saveSettings();
       });
 
-      const resetBtn = row2.createEl('span');
+      const rReset = mkRow();
+      const resetBtn = rReset.createEl('span');
       resetBtn.textContent = t('font.reset');
       resetBtn.style.cssText = `
         font-size:10px;padding:1px 8px;border-radius:8px;cursor:pointer;
         border:1px solid var(--background-modifier-border);color:var(--text-muted);
-        user-select:none;margin-left:auto;
+        user-select:none;
       `;
       resetBtn.addEventListener('click', async () => {
         this.settings.activeFont = '';
@@ -4519,52 +4618,171 @@ class SwiftSwitchPlugin extends Plugin {
       });
     };
 
-    const toggleFontCollapse = async (forceState) => {
-      const collapsed = forceState !== undefined ? forceState : !this.settings.fontCollapsed;
-      this.settings.fontCollapsed = collapsed;
-      await this.saveSettings();
-      fontCollapseIcon.textContent = collapsed ? '▶' : '▼';
-      if (collapsed) {
-        fontChipsContainer.style.display = 'none';
-        fontHint.textContent = t('font.clickToLoad');
-      } else {
-        if (fontsLoaded) {
-          fontChipsContainer.style.display = 'flex';
-        }
+    const loadFontsIfNeeded = async () => {
+      if (fontsLoaded) return;
+      if (isMobile) { fontsLoaded = []; return; }
+      fontHint.textContent = t('font.loading');
+      const fonts = await this.getSystemFonts();
+      fontsLoaded = fonts;
+      if (fonts.length === 0) {
+        fontHint.textContent = t('font.noFonts');
+        return;
       }
+      fontHint.textContent = '';
+      renderFontChips(fonts);
+      renderFontSettings();
     };
-    fontCollapseIcon.addEventListener('click', () => toggleFontCollapse());
 
-    fontLabel.addEventListener('click', async () => {
-      if (isMobile) {
-        const isCurrentlyVisible = fontStyleArea.style.display !== 'none';
-        fontStyleArea.style.display = isCurrentlyVisible ? 'none' : 'block';
-        return;
-      }
-      if (!fontsLoaded) {
-        fontHint.textContent = t('font.loading');
-        const fonts = await this.getSystemFonts();
-        fontsLoaded = fonts;
-        if (fonts.length === 0) {
-          fontHint.textContent = t('font.noFonts');
-          return;
-        }
-        fontHint.textContent = '';
-        fontChipsContainer.style.display = 'flex';
-        renderFontChips(fonts);
-        renderFontSettings();
-        await toggleFontCollapse(false);
-        return;
-      }
-      const isCurrentlyVisible = fontChipsContainer.style.display !== 'none';
-      await toggleFontCollapse(isCurrentlyVisible);
-    });
+    fontLabel.addEventListener('click', () => { loadFontsIfNeeded(); });
 
     renderFontSettings();
 
-    // ── 底部：其他插件链接 ────────────────────────────────────────────
+    // ── nav + state 逻辑 ──────────────────────────────────────────────
+    const _firstGroup = this.settings.groupOrder.find(g => this.settings.groups[g] && g !== '__bg__') || '__ungrouped__';
+    let _ssCur = isMobile ? _firstGroup : 'theme';
+    const _ssAreas = { theme: themeArea, bg: eyeCareArea, snippets: contentArea, font: fontArea, fontStyle: fontStyleArea };
+
+    const renderState = async () => {
+      stateList.empty();
+      const { enabledSnippets } = await this.getSnippetInfo();
+      const tags = [];
+      if (!isMobile) {
+        let { currentTheme } = await this.getThemeInfo();
+        if (currentTheme) tags.push({ label: currentTheme, group: 'theme', rm: null });
+      }
+      for (const name of enabledSnippets) tags.push({ label: name, group: 'snippet', rm: async () => { this._setSnippetEnabled(name, false); await this.saveSettings(); renderState(); renderNav(); renderContent(); } });
+      if (this.settings.eyeCareColor && this.settings.eyeCareColor.startsWith('__customcolor_')) {
+        const idx = parseInt(this.settings.eyeCareColor.slice(14), 10);
+        const colors = this.settings.customBgColors || [];
+        if (colors[idx]) tags.push({ label: colors[idx], group: 'bg', rm: async () => { this.settings.eyeCareColor = ''; this.applyEyeCareColor(); await this.saveSettings(); renderState(); renderNav(); renderEyeCare(); } });
+      }
+      if (this.settings.activeFont) tags.push({ label: this.settings.activeFont, group: 'font', rm: async () => { this.settings.activeFont = ''; this.applyFontSettings(); await this.saveSettings(); renderState(); renderNav(); renderFontSettings(); } });
+      if (tags.length === 0) {
+        const none = stateList.createEl('span');
+        none.textContent = '—';
+        none.style.cssText = 'font-size:11px;color:var(--text-faint);';
+        return;
+      }
+      tags.forEach(tg => {
+        const tag = stateList.createEl('span');
+        tag.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:rgba(var(--interactive-accent-rgb),0.15);color:var(--interactive-accent);border-radius:4px;padding:1px 4px 1px 8px;font-size:11px;';
+        tag.textContent = tg.label;
+        const grp = tag.createEl('span');
+        grp.textContent = tg.group;
+        grp.style.cssText = 'font-size:10px;color:var(--text-muted);';
+        if (tg.rm) {
+          const x = tag.createEl('span');
+          x.textContent = '×';
+          x.style.cssText = 'cursor:pointer;padding:0 3px;border-radius:3px;color:var(--text-muted);';
+          x.addEventListener('mouseenter', () => { x.style.background = 'var(--interactive-accent)'; x.style.color = '#fff'; });
+          x.addEventListener('mouseleave', () => { x.style.background = ''; x.style.color = 'var(--text-muted)'; });
+          x.addEventListener('click', async (e) => { e.stopPropagation(); await tg.rm(); });
+        }
+        if (!isMobile) {
+          tag.style.cursor = 'pointer';
+          tag.addEventListener('mouseenter', () => {
+            let target = tg.group;
+            if (tg.group === 'snippet') {
+              target = '__ungrouped__';
+              for (const gName of this.settings.groupOrder) {
+                if (this.settings.groups[gName] && this.settings.groups[gName].includes(tg.label)) { target = gName; break; }
+              }
+            }
+            if (_ssCur === target && !searchInput.value) return;
+            searchInput.value = ''; _ssCur = target; updateAreas(); renderNav();
+          });
+        }
+      });
+    };
+
+    const renderNav = () => {
+      nav.empty();
+      const addItem = (id, name, count, active) => {
+        const btn = nav.createEl('button');
+        btn.style.cssText = `display:flex;width:100%;align-items:center;gap:6px;background:none;border:0;border-radius:6px;padding:7px 8px;text-align:left;cursor:pointer;font-size:12px;color:var(--text-normal);margin-bottom:3px;${_ssCur === id && !searchInput.value ? 'background:rgba(var(--interactive-accent-rgb),0.15);font-weight:600;' : ''}`;
+        if (isMobile) btn.style.cssText += 'border:1px solid var(--background-modifier-border);min-width:0;';
+        const dot = btn.createEl('span');
+        dot.style.cssText = `width:6px;height:6px;border-radius:50%;flex:none;${active ? 'background:var(--interactive-accent);' : 'background:transparent;border:1px solid var(--background-modifier-border);'}`;
+        const lbl = btn.createEl('span');
+        lbl.textContent = name;
+        lbl.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        if (count !== '' && !isMobile) {
+          const n = btn.createEl('span');
+          n.textContent = count;
+          n.style.cssText = 'font-size:11px;color:var(--text-muted);';
+        }
+        btn.addEventListener('click', (e) => { e.stopPropagation(); searchInput.value = ''; _ssCur = id; updateAreas(); renderNav(); });
+        if (!isMobile) {
+          btn.addEventListener('mouseenter', () => { if (_ssCur === id && !searchInput.value) return; searchInput.value = ''; _ssCur = id; updateAreas(); renderNav(); });
+        }
+      };
+      addItem('theme', t('theme.section'), '', true);
+      const _sep1 = nav.createDiv();
+      _sep1.style.cssText = 'height:1px;background:var(--background-modifier-border);margin:4px 0;';
+      const orderedGroups = this.settings.groupOrder.filter(g => this.settings.groups[g] && g !== '__bg__');
+      for (const gName of orderedGroups) {
+        const members = this.settings.groups[gName] || [];
+        const cc = this.app.customCss;
+        const onCount = members.filter(n => cc && cc.enabledSnippets && cc.enabledSnippets.has(n)).length;
+        addItem(gName, gName, onCount > 0 ? onCount + '/' + members.length : String(members.length), onCount > 0);
+      }
+      const _allSnippetFiles = this._getAllSnippetFilesSync();
+      const _groupedSet = new Set();
+      for (const members of Object.values(this.settings.groups)) { members.forEach(s => _groupedSet.add(s)); }
+      const _ungroupedCount = _allSnippetFiles.filter(n => !_groupedSet.has(n)).length;
+      addItem('__ungrouped__', _currentLang === 'zh' ? '未分组 Snippets' : 'ungrouped Snippets', String(_ungroupedCount), false);
+      const _sep2 = nav.createDiv();
+      _sep2.style.cssText = 'height:1px;background:var(--background-modifier-border);margin:4px 0;';
+      const _bgMembers = this.settings.groups['__bg__'] || [];
+      const _bgColors = this.settings.customBgColors || [];
+      const _bgCount = _bgMembers.length + _bgColors.length;
+      addItem('bg', t('eyeCare.section'), String(_bgCount), !!(this.settings.eyeCareColor));
+      addItem('font', t('font.section'), '', !!(this.settings.activeFont));
+      if (!isMobile) {
+        const addGroupBtn = nav.createEl('button');
+        addGroupBtn.textContent = '+ ' + t('group.add');
+        addGroupBtn.style.cssText = 'display:flex;width:100%;align-items:center;gap:6px;background:none;border:1px dashed var(--background-modifier-border);border-radius:6px;padding:6px 8px;text-align:left;cursor:pointer;font-size:12px;color:var(--text-muted);margin-top:4px;';
+        addGroupBtn.addEventListener('mouseenter', () => { addGroupBtn.style.borderColor = 'var(--interactive-accent)'; addGroupBtn.style.color = 'var(--interactive-accent)'; });
+        addGroupBtn.addEventListener('mouseleave', () => { addGroupBtn.style.borderColor = 'var(--background-modifier-border)'; addGroupBtn.style.color = 'var(--text-muted)'; });
+        addGroupBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const groupName = await this._promptGroupName('');
+          if (groupName && !this.settings.groups[groupName]) {
+            this.settings.groups[groupName] = [];
+            this.settings.groupOrder.push(groupName);
+            await this.saveSettings();
+            _ssCur = groupName; updateAreas(); renderNav();
+          }
+        });
+      }
+    };
+
+
+    const updateAreas = () => {
+      const q = searchInput.value.trim().toLowerCase();
+      const isGroup = !_ssSpecialIds.includes(_ssCur);
+      Object.entries(_ssAreas).forEach(([id, area]) => {
+        if (q || isGroup) {
+          area.style.display = id === 'snippets' ? 'block' : 'none';
+        } else if (_ssCur === 'font') {
+          area.style.display = (id === 'font' || id === 'fontStyle') ? 'block' : 'none';
+        } else {
+          area.style.display = _ssCur === id ? 'block' : 'none';
+        }
+      });
+      if (!q && _ssCur === 'font') loadFontsIfNeeded();
+      if (q || isGroup) renderContent();
+    };
+
+    searchInput.addEventListener('input', () => { updateAreas(); renderNav(); });
+
+    const renderAll = async () => { await renderState(); renderNav(); updateAreas(); };
+    popup._ssRenderAll = renderAll;
+
+    renderAll();
     const footer = popup.createDiv();
     footer.style.cssText = 'padding-top:10px;margin-top:auto;border-top:1px solid var(--background-modifier-border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;opacity:0.5;transition:opacity 0.3s ease;cursor:default;position:relative;flex-shrink:0;';
+
 
     footer.addEventListener('mouseenter', () => { footer.style.opacity = '1'; });
     footer.addEventListener('mouseleave', () => { footer.style.opacity = '0.5'; });
@@ -4684,6 +4902,7 @@ class SwiftSwitchPlugin extends Plugin {
 
     mkPluginChip('SwiftGloss', 'regex-css-highlighter');
     mkPluginChip('SwiftMatch', 'swift-match');
+    mkPluginChip('file ops plus', 'file-ops-plus');
 
     const feedbackChip = footer.createEl('span');
     feedbackChip.textContent = t('popup.feedback');
@@ -4909,6 +5128,8 @@ class SwiftSwitchPlugin extends Plugin {
     applyStyle(isEnabled);
 
     let chipEnabled = isEnabled;
+    chip._applyStyle = applyStyle;
+    chip._syncEnabled = (en) => { chipEnabled = en; applyStyle(en); };
     let isPreviewing = false;
     let previewDisabledMembers = [];
 
@@ -4968,7 +5189,18 @@ class SwiftSwitchPlugin extends Plugin {
       chipEnabled = !chipEnabled;
       applyStyle(chipEnabled);
       new Notice(snippetName + ' ' + t('snippet.toggled'));
-      if (isExclusive) setTimeout(() => rerender(), 50);
+      if (isExclusive) {
+        const groupEl = chip.closest('[data-group]');
+        if (groupEl) {
+          groupEl.querySelectorAll('.ss-chip').forEach(c => {
+            if (c === chip || !c._syncEnabled) return;
+            const name = c.getAttribute('data-snippet');
+            const cc = this.app.customCss;
+            const en = cc && cc.enabledSnippets && cc.enabledSnippets.has(name);
+            c._syncEnabled(en);
+          });
+        }
+      }
     });
 
     const buildSnippetOpts = () => {
@@ -5860,10 +6092,7 @@ class SwiftSwitchPlugin extends Plugin {
 
     const renderFontSettings = () => {
       fontSettingsPanel.innerHTML = '';
-      if (!isMobile && !this.settings.activeFont && !this.settings.fontColor && this.settings.fontOpacity >= 1 && !this.settings.fontLineHeight && !this.settings.fontMarginL && !this.settings.fontMarginR) {
-        fontSettingsPanel.style.display = 'none';
-        return;
-      }
+
       fontSettingsPanel.style.display = 'block';
 
       const row1 = fontSettingsPanel.createDiv();
@@ -5884,6 +6113,15 @@ class SwiftSwitchPlugin extends Plugin {
         this.settings.fontColor = colorInput.value;
         this.applyFontSettings();
         await this.saveSettings();
+      });
+      const colorDefaultBtn = row1.createEl('span');
+      colorDefaultBtn.textContent = t('theme.default');
+      colorDefaultBtn.style.cssText = 'font-size:10px;padding:1px 6px;border-radius:8px;cursor:pointer;border:1px solid var(--background-modifier-border);color:var(--text-muted);user-select:none;';
+      colorDefaultBtn.addEventListener('click', async () => {
+        this.settings.fontColor = '';
+        this.applyFontSettings();
+        await this.saveSettings();
+        renderFontSettings();
       });
 
       row1.appendChild(mkLabel(t('font.opacity')));

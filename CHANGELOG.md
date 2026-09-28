@@ -1,4 +1,19 @@
-## 🆕 v1.2.0 (2026-09-08)
+## 🆕 v1.2.2 (2026-09-28)
+
+- **Panel Layout Refactor** — Redesigned panel with left-right split: header → state bar (On now + search) → body (nav + main) → footer
+- **Nav Auto-Switch** — Desktop: hovering nav items auto-switches groups; hovering On-now tags opens corresponding group
+- **Theme/Font Controls in Header** — Moved memory mode chip and dark/light mode pull-cord switch from theme area to header
+- **Font Style Vertical Layout** — Font style settings (color, opacity, line height, margins) now stack vertically for easier operation
+- **Search Filter** — Search filters snippets across all groups; no search shows only current group
+- **Nav Counts & Separators** — Nav shows item counts for ungrouped/background; separators between special and snippet groups; "Add Group" button at nav bottom (desktop)
+- **Ungrouped Rename** — "未分组" renamed to "未分组 Snippets" / "ungrouped Snippets"
+- **Color Chip Hover Preview** — Desktop: hovering background color chips previews the color live; mobile: tap directly applies (no hover preview to avoid tap conflict)
+- **Mobile Fixes** — Mobile panel uses draggable window (not fullscreen); nav includes theme/font items; font style settings persist after restart; tap on group no longer closes panel
+- **Plugin Link** — Added "file ops plus" link chip in footer alongside SwiftMatch/SwiftGloss
+- **Spacing Improvements** — Increased font style row spacing, group title spacing, nav button spacing, chips container padding
+- **Dynamic Plugin Path** — Use manifest.dir instead of hardcoded folder name for cross-platform compatibility
+
+## v1.2.0 (2026-09-08)
 
 - **Background Persistence Fix / 背景持久化修复** — When style memory is off, switching pages no longer clears the current background; the applied background now persists across page switches; added a delayed re-apply fallback to prevent Obsidian's re-render from stripping injected CSS / 记忆模式关闭时，切换页面不再清空当前背景，已应用的背景在页面切换后保持；增加延迟重新应用的兜底机制，防止 Obsidian 重渲染覆盖注入的 CSS
 - **Set/Clear Default Mutual Exclusion / 设为/取消默认互斥** — "Set as default for new pages" and "Clear default background" no longer appear simultaneously; only the relevant action shows based on current state / "设为新页面默认"与"取消新页面默认背景"不再同时出现，根据当前状态只显示对应操作

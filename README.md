@@ -50,11 +50,20 @@ Quickly toggle Obsidian CSS Snippets from a status bar popup.
 <details>
 <summary>Changelog</summary>
 
-### v1.2.0 (2026-09-08)
+### v1.2.2 (2026-09-28)
 
-- **Background Persistence Fix** — When style memory is off, switching pages no longer clears the current background; the applied background now persists across page switches. Added a delayed re-apply fallback to prevent Obsidian's re-render from stripping injected CSS
-- **Set/Clear Default Mutual Exclusion** — "Set as default for new pages" and "Clear default background" no longer appear simultaneously; only the relevant action shows based on current state
-- **Dark/Light Mode Setting Relocated** — Moved the "default dark/light mode for new pages" option out of image chip context menus into the bottom settings popup (hover the gear icon); replaced the binary toggle with a three-way selector (No switch / Dark / Light)
+- **Panel Layout Refactor** — Redesigned panel with left-right split: header → state bar (On now + search) → body (nav + main) → footer
+- **Nav Auto-Switch** — Desktop: hovering nav items auto-switches groups; hovering On-now tags opens corresponding group
+- **Theme/Font Controls in Header** — Moved memory mode chip and dark/light mode pull-cord switch from theme area to header
+- **Font Style Vertical Layout** — Font style settings (color, opacity, line height, margins) now stack vertically for easier operation
+- **Search Filter** — Search filters snippets across all groups; no search shows only current group
+- **Nav Counts & Separators** — Nav shows item counts for ungrouped/background; separators between special and snippet groups; "Add Group" button at nav bottom (desktop)
+- **Ungrouped Rename** — "未分组" renamed to "未分组 Snippets" / "ungrouped Snippets"
+- **Color Chip Hover Preview** — Desktop: hovering background color chips previews the color live; mobile: tap directly applies (no hover preview to avoid tap conflict)
+- **Mobile Fixes** — Mobile panel uses draggable window (not fullscreen); nav includes theme/font items; font style settings persist after restart; tap on group no longer closes panel
+- **Plugin Link** — Added "file ops plus" link chip in footer alongside SwiftMatch/SwiftGloss
+- **Spacing Improvements** — Increased font style row spacing, group title spacing, nav button spacing, chips container padding
+- **Dynamic Plugin Path** — Use manifest.dir instead of hardcoded folder name for cross-platform compatibility
 
 ### v1.1.9 (2026-08-13)
 
