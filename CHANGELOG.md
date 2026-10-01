@@ -1,4 +1,13 @@
-## 🆕 v1.2.2 (2026-09-28)
+## 🆕 v1.2.3 (2026-10-02)
+
+- **Theme Switch Bug Fix** — Fixed race condition where hover-preview wrote appearance.json asynchronously, causing theme to revert after switching tabs
+- **Memory Mode Panel (A+D)** — Added "Memory" nav item showing per-tab remembered styles list: current tab highlighted, searchable, with forget/clean-invalid/forget-all actions
+- **Memory Chip Badges (D)** — Theme and background chips show ◉N badge indicating how many tabs remember that value; click badge to see usage list and forget individually
+- **Memory Title Click-Open** — Clicking a file title in the memory list opens that document directly
+- **Nav Instant Refresh** — Enabling/disabling snippet chips now instantly updates left nav dot status and counts
+- **Floating Button Refresh** — Switching theme/background via floating button wheel now instantly refreshes panel memory data when panel is open
+
+## v1.2.2 (2026-09-28)
 
 - **Panel Layout Refactor** — Redesigned panel with left-right split: header → state bar (On now + search) → body (nav + main) → footer
 - **Nav Auto-Switch** — Desktop: hovering nav items auto-switches groups; hovering On-now tags opens corresponding group

@@ -143,6 +143,23 @@ const i18n = {
     'styleMemory.saved': '页面风格已记忆',
     'styleMemory.restored': '已恢复页面风格',
     'styleMemory.restoreFailed': '恢复页面风格失败',
+    'memory.section': '记忆',
+    'memory.hint': '各标签页记忆的风格列表',
+    'memory.empty': '暂无已记忆的页面',
+    'memory.current': '当前',
+    'memory.forget': '遗忘',
+    'memory.forgetAll': '全部遗忘',
+    'memory.forgetDone': '已遗忘该页面风格',
+    'memory.forgetAllConfirm': '确定清空所有页面的记忆风格？',
+    'memory.forgetAllDone': '已清空全部记忆',
+    'memory.searchPlaceholder': '搜索标签页 / 路径',
+    'memory.noTheme': '默认',
+    'memory.usedBy': '被 {0} 个标签页记住',
+    'memory.usedByOne': '被 1 个标签页记住',
+    'memory.forgetPage': '遗忘此页面的记忆',
+    'memory.invalid': '失效',
+    'memory.cleanInvalid': '清空失效项',
+    'memory.cleanInvalidDone': '已清空失效项',
     'group.exclusive': '互斥分组',
     'group.exclusive.on': '已设为互斥分组',
     'group.exclusive.off': '已取消互斥分组',
@@ -302,6 +319,23 @@ const i18n = {
     'styleMemory.saved': 'Page style saved',
     'styleMemory.restored': 'Page style restored',
     'styleMemory.restoreFailed': 'Failed to restore page style',
+    'memory.section': 'Memory',
+    'memory.hint': 'Remembered styles per tab',
+    'memory.empty': 'No remembered pages',
+    'memory.current': 'Current',
+    'memory.forget': 'Forget',
+    'memory.forgetAll': 'Forget All',
+    'memory.forgetDone': 'Page style forgotten',
+    'memory.forgetAllConfirm': 'Clear all remembered page styles?',
+    'memory.forgetAllDone': 'All memories cleared',
+    'memory.searchPlaceholder': 'Search tab / path',
+    'memory.noTheme': 'Default',
+    'memory.usedBy': 'Remembered by {0} tabs',
+    'memory.usedByOne': 'Remembered by 1 tab',
+    'memory.forgetPage': 'Forget this page style',
+    'memory.invalid': 'Invalid',
+    'memory.cleanInvalid': 'Clean invalid',
+    'memory.cleanInvalidDone': 'Invalid entries cleaned',
     'group.exclusive': 'Exclusive Group',
     'group.exclusive.on': 'Set as exclusive group',
     'group.exclusive.off': 'Exclusive group removed',
@@ -378,6 +412,7 @@ class SwiftSwitchPlugin extends Plugin {
         nextIdx = idx > 0 ? idx - 1 : list.length - 1;
       }
       await this.switchTheme(list[nextIdx]);
+      this._refreshPopupIfNeeded();
     });
 
     this.addCommand({
@@ -501,6 +536,7 @@ class SwiftSwitchPlugin extends Plugin {
       language: 'en',
       groups: {},          // { groupName: [snippetName, ...], ... }
       groupOrder: [],      // [groupName, ...] 维护分组顺序
+      navOrder: [],        // [itemId, ...] nav 项统一顺序（含 theme/分组名/__ungrouped__/bg/font）
       collapsedGroups: {}, // { groupName: true/false, ... }
       floatingButton: null, // { text, css, position: {x, y} } or null
       statusBarButton: null, // { text, css } or null
@@ -650,6 +686,97 @@ class SwiftSwitchPlugin extends Plugin {
     } catch (_e) {
       new Notice(t('theme.switchFailed'));
     }
+  }
+
+  // ─── 预览主题（仅实时切换 CSS，不写 appearance.json）─────────────────
+  _previewTheme(themeName) {
+    try {
+      if (this.app.customCss && typeof this.app.customCss.setTheme === 'function') {
+        this.app.customCss.setTheme(themeName);
+      } else if (this.app.customCss && typeof this.app.customCss.theme === 'string') {
+        this.app.customCss.theme = themeName;
+      }
+    } catch (_e) {}
+  }
+
+  // ─── 记忆使用者弹层 ──────────────────────────────────────────────────
+  _refreshPopupIfNeeded() {
+    const popup = document.getElementById('ss-snippets-popup');
+    if (popup && popup._ssRefreshAll) popup._ssRefreshAll();
+  }
+
+  _showMemoryPopup(anchorEl, filePaths, valueLabel, fieldType, refreshFn) {
+    document.querySelectorAll('.ss-memory-popup').forEach(p => p.remove());
+    const pop = document.createElement('div');
+    pop.className = 'ss-memory-popup';
+    pop.style.cssText = 'position:fixed;z-index:10003;background:rgba(var(--mono-rgb-0),0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--background-modifier-border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:10px;min-width:220px;max-width:300px;max-height:280px;display:flex;flex-direction:column;';
+    const title = pop.createEl('div');
+    title.style.cssText = 'font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-normal);';
+    title.textContent = (filePaths.length === 1 ? t('memory.usedByOne') : t('memory.usedBy').replace('{0}', String(filePaths.length))) + ' · ' + valueLabel;
+    const listEl = pop.createEl('div');
+    listEl.style.cssText = 'flex:1;overflow-y:auto;min-height:0;';
+    for (const fp of filePaths) {
+      const item = listEl.createEl('div');
+      item.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px dashed var(--background-modifier-border);';
+      const name = fp.split('/').pop() || fp;
+      const nameEl = item.createEl('span', { text: name });
+      nameEl.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text-normal);';
+      nameEl.title = fp;
+      const forgetLink = item.createEl('span', { text: t('memory.forget') });
+      forgetLink.style.cssText = 'font-size:11px;color:var(--text-error);cursor:pointer;flex-shrink:0;';
+      forgetLink.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (this.settings.pageStyles && this.settings.pageStyles[fp]) {
+          if (fieldType === 'theme') {
+            delete this.settings.pageStyles[fp].theme;
+          } else if (fieldType === 'bg') {
+            delete this.settings.pageStyles[fp].eyeCareColor;
+          } else {
+            delete this.settings.pageStyles[fp];
+          }
+          if (Object.keys(this.settings.pageStyles[fp]).length === 0) delete this.settings.pageStyles[fp];
+          await this.saveSettings();
+          item.remove();
+          if (refreshFn) await refreshFn();
+        }
+      });
+    }
+    if (filePaths.length > 1) {
+      const allBtn = pop.createEl('button', { text: t('memory.forgetAll') });
+      allBtn.style.cssText = 'margin-top:8px;width:100%;border:1px solid var(--background-modifier-border);background:var(--background-primary);border-radius:6px;padding:5px;cursor:pointer;font-size:12px;color:var(--text-error);';
+      allBtn.addEventListener('click', async () => {
+        for (const fp of filePaths) {
+          if (this.settings.pageStyles && this.settings.pageStyles[fp]) {
+            if (fieldType === 'theme') {
+              delete this.settings.pageStyles[fp].theme;
+            } else if (fieldType === 'bg') {
+              delete this.settings.pageStyles[fp].eyeCareColor;
+            } else {
+              delete this.settings.pageStyles[fp];
+            }
+            if (this.settings.pageStyles[fp] && Object.keys(this.settings.pageStyles[fp]).length === 0) delete this.settings.pageStyles[fp];
+          }
+        }
+        await this.saveSettings();
+        pop.remove();
+        if (refreshFn) await refreshFn();
+      });
+    }
+    document.body.appendChild(pop);
+    const rect = anchorEl.getBoundingClientRect();
+    let left = rect.left;
+    let top = rect.bottom + 6;
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+    requestAnimationFrame(() => {
+      const pRect = pop.getBoundingClientRect();
+      if (pRect.right > window.innerWidth) pop.style.left = (window.innerWidth - pRect.width - 8) + 'px';
+      if (pRect.bottom > window.innerHeight) pop.style.top = (rect.top - pRect.height - 6) + 'px';
+    });
+    const closeHandler = (ev) => {
+      if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', closeHandler); }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
   }
 
   // ─── 切换深浅模式 ──────────────────────────────────────────────────────
@@ -1652,6 +1779,7 @@ class SwiftSwitchPlugin extends Plugin {
           nextIdx = idx > 0 ? idx - 1 : list.length - 1;
         }
         await this.switchTheme(list[nextIdx]);
+        this._refreshPopupIfNeeded();
       } else {
         const bgGroupName = '__bg__';
         const bgMembers = this.settings.groups[bgGroupName] || [];
@@ -1709,6 +1837,7 @@ class SwiftSwitchPlugin extends Plugin {
         if (this.settings.styleMemory && this._lastFilePath) {
           await this._savePageStyle(this._lastFilePath);
         }
+        this._refreshPopupIfNeeded();
       }
     }, { passive: false });
 
@@ -2842,13 +2971,13 @@ class SwiftSwitchPlugin extends Plugin {
     };
 
     header.addEventListener('mousedown', (e) => {
-      if (e.target === closeBtn || e.target === langSwitch || e.target === _hdrMemChip || e.target.closest('.ss-mode-switch')) return;
+      if (e.target === closeBtn || e.target === langSwitch || e.target === _hdrMemChip || e.target === searchInput || e.target.closest('.ss-mode-switch')) return;
       startDrag(e.clientX, e.clientY);
     });
     document.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
     document.addEventListener('mouseup', () => endDrag());
     header.addEventListener('touchstart', (e) => {
-      if (e.target === closeBtn || e.target === langSwitch || e.target === _hdrMemChip || e.target.closest('.ss-mode-switch')) return;
+      if (e.target === closeBtn || e.target === langSwitch || e.target === _hdrMemChip || e.target === searchInput || e.target.closest('.ss-mode-switch')) return;
       const t = e.touches[0];
       startDrag(t.clientX, t.clientY);
     }, { passive: true });
@@ -2861,19 +2990,37 @@ class SwiftSwitchPlugin extends Plugin {
     document.addEventListener('touchend', () => endDrag());
 
 
-    // ── 状态栏（On now + search）──────────────────────────────────────
-    const stateBar = popup.createDiv();
-    stateBar.style.cssText = 'flex-shrink:0;display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--background-modifier-border);background:rgba(var(--mono-rgb-0),0.3);';
-    if (isMobile) stateBar.style.flexWrap = 'wrap';
-    const stateLabel = stateBar.createEl('span');
-    stateLabel.textContent = 'On now';
-    stateLabel.style.cssText = 'font-size:11px;color:var(--text-muted);white-space:nowrap;';
-    const stateList = stateBar.createDiv();
-    stateList.style.cssText = 'flex:1;display:flex;flex-wrap:wrap;gap:4px;min-height:20px;';
-    const searchInput = stateBar.createEl('input', { type: 'search' });
-    searchInput.placeholder = 'Search...';
-    searchInput.style.cssText = 'border:1px solid var(--background-modifier-border);background:var(--background-primary);color:var(--text-normal);border-radius:6px;padding:3px 8px;width:140px;font-size:12px;flex-shrink:0;';
-    if (isMobile) searchInput.style.width = '100%';
+    // ── 搜索框（手机端 stateBar / 桌面端标题栏悬停展开）──────────────
+    let searchInput;
+    if (isMobile) {
+      const stateBar = popup.createDiv();
+      stateBar.style.cssText = 'flex-shrink:0;display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--background-modifier-border);background:rgba(var(--mono-rgb-0),0.3);';
+      searchInput = stateBar.createEl('input', { type: 'search' });
+      searchInput.placeholder = 'Search...';
+      searchInput.style.cssText = 'border:1px solid var(--background-modifier-border);background:var(--background-primary);color:var(--text-normal);border-radius:6px;padding:3px 8px;width:100%;font-size:12px;flex-shrink:0;';
+    } else {
+      searchInput = header.createEl('input', { type: 'search' });
+      searchInput.placeholder = 'Search...';
+      searchInput.style.cssText = 'border:1px solid transparent;background:var(--background-primary);color:var(--text-normal);border-radius:6px;padding:3px 0;width:0;font-size:12px;flex-shrink:0;opacity:0;transition:width 0.2s ease,opacity 0.2s ease,padding 0.2s ease,border-color 0.2s ease;overflow:hidden;';
+      header.insertBefore(searchInput, _hdrMemChip);
+      const _expandSearch = () => {
+        searchInput.style.width = '140px';
+        searchInput.style.padding = '3px 8px';
+        searchInput.style.opacity = '1';
+        searchInput.style.borderColor = 'var(--background-modifier-border)';
+      };
+      const _collapseSearch = () => {
+        if (searchInput.value.trim()) return;
+        searchInput.style.width = '0';
+        searchInput.style.padding = '3px 0';
+        searchInput.style.opacity = '0';
+        searchInput.style.borderColor = 'transparent';
+      };
+      header.addEventListener('mouseenter', _expandSearch);
+      header.addEventListener('mouseleave', _collapseSearch);
+      searchInput.addEventListener('focus', _expandSearch);
+      searchInput.addEventListener('blur', _collapseSearch);
+    }
 
     // ── 主体（nav + main）────────────────────────────────────────────
     const body = popup.createDiv();
@@ -2915,25 +3062,36 @@ class SwiftSwitchPlugin extends Plugin {
 
       // 默认主题 chip
       const defaultChip = themeChips.createEl('span');
-      defaultChip.textContent = t('theme.default');
       const isDefaultActive = currentTheme === '';
       let defaultPreviewing = false;
       defaultChip.style.cssText = `
-        display:inline-block;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;
+        display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;
         user-select:none;transition:all 0.15s ease;
         border:1px solid ${isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
         background:${isDefaultActive ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)'};
         color:${isDefaultActive ? '#fff' : 'var(--text-muted)'};
       `;
+      const defaultLabel = defaultChip.createEl('span', { text: t('theme.default') });
+      const _defaultUsedBy = Object.entries(this.settings.pageStyles || {}).filter(([fp, p]) => p.theme === '').map(([fp]) => fp);
+      if (_defaultUsedBy.length > 0) {
+        const badge = defaultChip.createEl('span');
+        badge.textContent = '◉' + _defaultUsedBy.length;
+        badge.style.cssText = 'font-size:10px;opacity:0.7;border-radius:8px;padding:0 4px;flex-shrink:0;cursor:pointer;';
+        badge.title = t('memory.usedBy').replace('{0}', String(_defaultUsedBy.length));
+        badge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._showMemoryPopup(badge, _defaultUsedBy, t('theme.default'), 'theme', popup._ssRefreshAfterForget);
+        });
+      }
       defaultChip.addEventListener('mouseenter', async () => {
         if (currentTheme === '') return;
         defaultPreviewing = true;
-        await this.switchTheme('', true);
+        this._previewTheme('');
       });
       defaultChip.addEventListener('mouseleave', async () => {
         if (!defaultPreviewing) return;
         defaultPreviewing = false;
-        await this.switchTheme(currentTheme, true);
+        this._previewTheme(currentTheme);
       });
       defaultChip.addEventListener('click', async () => {
         defaultPreviewing = false;
@@ -3031,29 +3189,46 @@ class SwiftSwitchPlugin extends Plugin {
       this._attachSsChipHover(defaultChip, buildDefaultThemeOpts);
 
       const themeChipEls = [];
+      const _themeUsedBy = (themeName) => {
+        const ps = this.settings.pageStyles || {};
+        return Object.entries(ps).filter(([fp, p]) => p.theme === themeName).map(([fp]) => fp);
+      };
       themeDirs.forEach(themeName => {
         const chip = themeChips.createEl('span');
-        chip.textContent = themeName;
         const isActive = currentTheme === themeName;
         let themePreviewing = false;
         chip.style.cssText = `
-          display:inline-block;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;
-          user-select:none;transition:all 0.15s ease;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+          display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;
+          user-select:none;transition:all 0.15s ease;max-width:220px;overflow:hidden;
           border:1px solid ${isActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
           background:${isActive ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)'};
           color:${isActive ? '#fff' : 'var(--text-muted)'};
         `;
+        const chipLabel = chip.createEl('span', { text: themeName });
+        chipLabel.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
         chip.title = themeName;
+        const _usedBy = _themeUsedBy(themeName);
+        if (_usedBy.length > 0) {
+          const badge = chip.createEl('span');
+          badge.textContent = '◉' + _usedBy.length;
+          badge.style.cssText = 'font-size:10px;opacity:0.7;border-radius:8px;padding:0 4px;flex-shrink:0;cursor:pointer;';
+          badge.title = t('memory.usedBy').replace('{0}', String(_usedBy.length));
+          badge.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const refresh = popup._ssRefreshAfterForget;
+            this._showMemoryPopup(badge, _usedBy, themeName, 'theme', refresh);
+          });
+        }
         themeChipEls.push({ el: chip, name: themeName });
         chip.addEventListener('mouseenter', async () => {
           if (currentTheme === themeName) return;
           themePreviewing = true;
-          await this.switchTheme(themeName, true);
+          this._previewTheme(themeName);
         });
         chip.addEventListener('mouseleave', async () => {
           if (!themePreviewing) return;
           themePreviewing = false;
-          await this.switchTheme(currentTheme, true);
+          this._previewTheme(currentTheme);
         });
         chip.addEventListener('click', async () => {
           themePreviewing = false;
@@ -3780,29 +3955,46 @@ class SwiftSwitchPlugin extends Plugin {
         dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${colorVal};`;
         const nameEl = chip.createEl('span', { text: colorVal });
         nameEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        const _bgKey = `__customcolor_${cIdx}`;
+        const _bgUsedBy = Object.entries(this.settings.pageStyles || {}).filter(([fp, p]) => p.eyeCareColor === _bgKey).map(([fp]) => fp);
+        if (_bgUsedBy.length > 0) {
+          const badge = chip.createEl('span');
+          badge.textContent = '◉' + _bgUsedBy.length;
+          badge.style.cssText = 'font-size:10px;opacity:0.7;border-radius:8px;padding:0 4px;flex-shrink:0;cursor:pointer;';
+          badge.title = t('memory.usedBy').replace('{0}', String(_bgUsedBy.length));
+          badge.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._showMemoryPopup(badge, _bgUsedBy, colorVal, 'bg', popup._ssRefreshAfterForget);
+          });
+        }
         const applyChipStyle = (active) => {
           chip.style.borderColor = active ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
           chip.style.background = active ? 'var(--interactive-accent)' : 'var(--background-primary)';
           chip.style.color = active ? '#fff' : 'var(--text-normal)';
         };
         let _colorPreviewing = false;
-        const _origEyeCareColor = this.settings.eyeCareColor;
+        let _colorPrevEyeCare = '';
         if (!isMobile) {
         chip.addEventListener('mouseenter', async () => {
           if (this.settings.eyeCareColor === `__customcolor_${cIdx}`) return;
           _colorPreviewing = true;
+          _colorPrevEyeCare = this.settings.eyeCareColor;
           this.settings.eyeCareColor = `__customcolor_${cIdx}`;
           this.applyEyeCareColor();
         });
         chip.addEventListener('mouseleave', async () => {
           if (!_colorPreviewing) return;
           _colorPreviewing = false;
-          this.settings.eyeCareColor = _origEyeCareColor;
+          this.settings.eyeCareColor = _colorPrevEyeCare;
           this.applyEyeCareColor();
         });
         }
         chip.addEventListener('click', async () => {
-          _colorPreviewing = false;
+          if (_colorPreviewing) {
+            _colorPreviewing = false;
+            this.settings.eyeCareColor = _colorPrevEyeCare;
+            this.applyEyeCareColor();
+          }
           if (this.settings.eyeCareColor === `__customcolor_${cIdx}`) {
             this.settings.eyeCareColor = '';
           } else {
@@ -3972,7 +4164,7 @@ class SwiftSwitchPlugin extends Plugin {
     renderEyeCare();
 
     // ── 内容区域 ──────────────────────────────────────────────────────
-    const _ssSpecialIds = ['theme', 'bg', 'font', 'fontStyle'];
+    const _ssSpecialIds = ['theme', 'bg', 'font', 'fontStyle', 'memory'];
     const contentArea = main.createDiv();
     contentArea.style.cssText = 'min-height:60px;';
 
@@ -4637,64 +4829,227 @@ class SwiftSwitchPlugin extends Plugin {
 
     renderFontSettings();
 
+    // ── 记忆区域 ──────────────────────────────────────────────────────
+    const memoryArea = main.createDiv();
+    memoryArea.style.cssText = 'padding:4px 0;';
+
+    const _memoryGetBgLabel = (key) => {
+      if (!key) return '';
+      if (key.startsWith('__customcolor_')) {
+        const idx = parseInt(key.slice(14), 10);
+        return (this.settings.customBgColors || [])[idx] || key;
+      }
+      if (key.startsWith('__img_')) {
+        const idx = parseInt(key.slice(6), 10);
+        const img = (this.settings.bgImages || [])[idx];
+        return img ? (img.name || `img${idx}`) : key;
+      }
+      if (key.startsWith('__snippet__')) {
+        return key.slice('__snippet__'.length);
+      }
+      return key;
+    };
+
+    const _memoryBuildChips = (profile) => {
+      const chips = [];
+      if (profile.theme !== undefined && profile.theme !== '') {
+        chips.push({ label: profile.theme, type: 'theme' });
+      }
+      if (profile.isDark !== undefined) {
+        chips.push({ label: profile.isDark ? 'Dark' : 'Light', type: 'mode' });
+      }
+      const bgLabel = _memoryGetBgLabel(profile.eyeCareColor);
+      if (profile.eyeCareColor && bgLabel) {
+        chips.push({ label: bgLabel, type: 'bg', color: (profile.eyeCareColor.startsWith('__customcolor_') ? (this.settings.customBgColors || [])[parseInt(profile.eyeCareColor.slice(14), 10)] : '') });
+      }
+      if (profile.activeFont) {
+        chips.push({ label: profile.activeFont, type: 'font' });
+      }
+      if (profile.enabledSnippets && profile.enabledSnippets.length > 0) {
+        chips.push({ label: profile.enabledSnippets.length + ' snippets', type: 'snippet' });
+      }
+      return chips;
+    };
+
+    const _memoryGetAllEntries = () => {
+      const pageStyles = this.settings.pageStyles || {};
+      const allFiles = this.app.vault.getFiles().map(f => f.path);
+      const entries = [];
+      for (const [filePath, profile] of Object.entries(pageStyles)) {
+        const exists = allFiles.includes(filePath);
+        entries.push({ filePath, profile, exists });
+      }
+      return entries;
+    };
+
+    const renderMemory = async () => {
+      memoryArea.empty();
+      const pageStyles = this.settings.pageStyles || {};
+      const entryCount = Object.keys(pageStyles).length;
+
+      const headerRow = memoryArea.createDiv();
+      headerRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;';
+      const titleLabel = headerRow.createEl('div', { text: t('memory.section') });
+      titleLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);';
+      const countBadge = headerRow.createEl('span', { text: String(entryCount) });
+      countBadge.style.cssText = 'font-size:11px;color:var(--text-muted);background:var(--background-modifier-border);border-radius:8px;padding:0 6px;';
+
+      if (entryCount === 0) {
+        const hint = memoryArea.createEl('div', { text: t('memory.empty') });
+        hint.style.cssText = 'font-size:12px;color:var(--text-muted);padding:20px 0;text-align:center;';
+        return;
+      }
+
+      const toolRow = memoryArea.createDiv();
+      toolRow.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap;';
+      const searchInput = toolRow.createEl('input');
+      searchInput.type = 'text';
+      searchInput.placeholder = t('memory.searchPlaceholder');
+      searchInput.style.cssText = 'flex:1;min-width:120px;border:1px solid var(--background-modifier-border);border-radius:6px;padding:5px 9px;font-size:12px;background:var(--background-primary);color:var(--text-normal);';
+      const cleanBtn = toolRow.createEl('button');
+      cleanBtn.textContent = t('memory.cleanInvalid');
+      cleanBtn.style.cssText = 'border:1px solid var(--background-modifier-border);background:var(--background-primary);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;color:var(--text-muted);';
+      const clearAllBtn = toolRow.createEl('button');
+      clearAllBtn.textContent = t('memory.forgetAll');
+      clearAllBtn.style.cssText = 'border:1px solid var(--background-modifier-border);background:var(--background-primary);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;color:var(--text-error);';
+
+      const listContainer = memoryArea.createDiv();
+      listContainer.style.cssText = 'min-height:40px;';
+
+
+      const currentFilePath = this._getActiveFilePath();
+      const allEntries = _memoryGetAllEntries();
+
+      const renderList = () => {
+        listContainer.empty();
+        const q = searchInput.value.trim().toLowerCase();
+        let entries = allEntries.slice();
+        if (q) {
+          entries = entries.filter(e => e.filePath.toLowerCase().includes(q));
+        }
+        entries.sort((a, b) => {
+          if (a.filePath === currentFilePath) return -1;
+          if (b.filePath === currentFilePath) return 1;
+          if (a.exists !== b.exists) return a.exists ? -1 : 1;
+          return a.filePath.localeCompare(b.filePath);
+        });
+
+        if (entries.length === 0) {
+          const hint = listContainer.createEl('div', { text: t('memory.empty') });
+          hint.style.cssText = 'font-size:12px;color:var(--text-muted);padding:12px 0;text-align:center;';
+          return;
+        }
+
+        for (const entry of entries) {
+          const row = listContainer.createDiv();
+          const isCurrent = entry.filePath === currentFilePath;
+          row.style.cssText = `display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid ${isCurrent ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};border-radius:8px;margin-bottom:6px;background:${isCurrent ? 'rgba(var(--interactive-accent-rgb),0.08)' : 'var(--background-primary)'};`;
+
+          const nameCol = row.createDiv();
+          nameCol.style.cssText = 'width:160px;flex:none;overflow:hidden;';
+          const fileName = entry.filePath.split('/').pop() || entry.filePath;
+          const nameEl = nameCol.createEl('div');
+          nameEl.style.cssText = 'font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;display:flex;align-items:center;gap:4px;cursor:pointer;';
+          nameEl.textContent = fileName;
+          nameEl.title = entry.filePath;
+          if (entry.exists) {
+            nameEl.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this.app.workspace.openLinkText(entry.filePath, '');
+            });
+          }
+          if (isCurrent) {
+            const curTag = nameEl.createEl('span', { text: t('memory.current') });
+            curTag.style.cssText = 'font-size:10px;color:var(--interactive-accent);border:1px solid var(--interactive-accent);border-radius:8px;padding:0 5px;flex:none;';
+          }
+          if (!entry.exists) {
+            const invTag = nameEl.createEl('span', { text: t('memory.invalid') });
+            invTag.style.cssText = 'font-size:10px;color:var(--text-error);border:1px solid var(--text-error);border-radius:8px;padding:0 5px;flex:none;';
+          }
+          const pathEl = nameCol.createEl('div', { text: entry.filePath });
+          pathEl.style.cssText = 'font-size:11px;color:var(--text-muted);white-space:nowrap;text-overflow:ellipsis;overflow:hidden;';
+
+          const chipsCol = row.createDiv();
+          chipsCol.style.cssText = 'display:flex;gap:5px;flex-wrap:wrap;flex:1;align-items:center;';
+          const chips = _memoryBuildChips(entry.profile);
+          if (chips.length === 0) {
+            const none = chipsCol.createEl('span', { text: '—' });
+            none.style.cssText = 'color:var(--text-faint);font-size:12px;';
+          }
+          for (const c of chips) {
+            const chip = chipsCol.createEl('span');
+            chip.style.cssText = 'display:inline-flex;align-items:center;gap:3px;border:1px solid var(--background-modifier-border);border-radius:12px;padding:1px 8px;font-size:11px;color:var(--text-normal);background:var(--background-primary);';
+            if (c.color) {
+              const dot = chip.createEl('span');
+              dot.style.cssText = `display:inline-block;width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${c.color};`;
+            }
+            const lbl = chip.createEl('span', { text: c.label });
+            lbl.style.cssText = 'white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis;';
+          }
+
+          const actionCol = row.createDiv();
+          actionCol.style.cssText = 'display:flex;gap:4px;flex:none;';
+          const forgetBtn = actionCol.createEl('button');
+          forgetBtn.textContent = t('memory.forget');
+          forgetBtn.style.cssText = 'border:1px solid var(--background-modifier-border);background:var(--background-primary);border-radius:6px;padding:3px 9px;cursor:pointer;font-size:11px;color:var(--text-error);opacity:0.5;transition:opacity 0.15s ease;';
+          row.addEventListener('mouseenter', () => { forgetBtn.style.opacity = '1'; });
+          row.addEventListener('mouseleave', () => { forgetBtn.style.opacity = '0.5'; });
+          forgetBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            delete this.settings.pageStyles[entry.filePath];
+            await this.saveSettings();
+            new Notice(t('memory.forgetDone'));
+            await _refreshChipsAfterForget();
+          });
+        }
+      };
+
+      searchInput.addEventListener('input', renderList);
+      cleanBtn.addEventListener('click', async () => {
+        const allFiles = this.app.vault.getFiles().map(f => f.path);
+        let cleaned = 0;
+        for (const fp of Object.keys(this.settings.pageStyles || {})) {
+          if (!allFiles.includes(fp)) {
+            delete this.settings.pageStyles[fp];
+            cleaned++;
+          }
+        }
+        if (cleaned > 0) await this.saveSettings();
+        new Notice(t('memory.cleanInvalidDone') + (cleaned > 0 ? ` (${cleaned})` : ''));
+        await _refreshChipsAfterForget();
+      });
+      clearAllBtn.addEventListener('click', async () => {
+        if (!confirm(t('memory.forgetAllConfirm'))) return;
+        this.settings.pageStyles = {};
+        await this.saveSettings();
+        new Notice(t('memory.forgetAllDone'));
+        await _refreshChipsAfterForget();
+      });
+
+      renderList();
+    };
+    popup._ssRenderMemory = renderMemory;
+    const _refreshChipsAfterForget = async () => {
+      await renderThemes();
+      await renderEyeCare();
+      await renderMemory();
+    };
+    popup._ssRefreshAfterForget = _refreshChipsAfterForget;
+    popup._ssRefreshAll = async () => {
+      await renderThemes();
+      await renderEyeCare();
+      await renderMemory();
+      renderNav();
+    };
+
     // ── nav + state 逻辑 ──────────────────────────────────────────────
     const _firstGroup = this.settings.groupOrder.find(g => this.settings.groups[g] && g !== '__bg__') || '__ungrouped__';
     let _ssCur = isMobile ? _firstGroup : 'theme';
-    const _ssAreas = { theme: themeArea, bg: eyeCareArea, snippets: contentArea, font: fontArea, fontStyle: fontStyleArea };
+    const _ssAreas = { theme: themeArea, bg: eyeCareArea, snippets: contentArea, font: fontArea, fontStyle: fontStyleArea, memory: memoryArea };
 
-    const renderState = async () => {
-      stateList.empty();
-      const { enabledSnippets } = await this.getSnippetInfo();
-      const tags = [];
-      if (!isMobile) {
-        let { currentTheme } = await this.getThemeInfo();
-        if (currentTheme) tags.push({ label: currentTheme, group: 'theme', rm: null });
-      }
-      for (const name of enabledSnippets) tags.push({ label: name, group: 'snippet', rm: async () => { this._setSnippetEnabled(name, false); await this.saveSettings(); renderState(); renderNav(); renderContent(); } });
-      if (this.settings.eyeCareColor && this.settings.eyeCareColor.startsWith('__customcolor_')) {
-        const idx = parseInt(this.settings.eyeCareColor.slice(14), 10);
-        const colors = this.settings.customBgColors || [];
-        if (colors[idx]) tags.push({ label: colors[idx], group: 'bg', rm: async () => { this.settings.eyeCareColor = ''; this.applyEyeCareColor(); await this.saveSettings(); renderState(); renderNav(); renderEyeCare(); } });
-      }
-      if (this.settings.activeFont) tags.push({ label: this.settings.activeFont, group: 'font', rm: async () => { this.settings.activeFont = ''; this.applyFontSettings(); await this.saveSettings(); renderState(); renderNav(); renderFontSettings(); } });
-      if (tags.length === 0) {
-        const none = stateList.createEl('span');
-        none.textContent = '—';
-        none.style.cssText = 'font-size:11px;color:var(--text-faint);';
-        return;
-      }
-      tags.forEach(tg => {
-        const tag = stateList.createEl('span');
-        tag.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:rgba(var(--interactive-accent-rgb),0.15);color:var(--interactive-accent);border-radius:4px;padding:1px 4px 1px 8px;font-size:11px;';
-        tag.textContent = tg.label;
-        const grp = tag.createEl('span');
-        grp.textContent = tg.group;
-        grp.style.cssText = 'font-size:10px;color:var(--text-muted);';
-        if (tg.rm) {
-          const x = tag.createEl('span');
-          x.textContent = '×';
-          x.style.cssText = 'cursor:pointer;padding:0 3px;border-radius:3px;color:var(--text-muted);';
-          x.addEventListener('mouseenter', () => { x.style.background = 'var(--interactive-accent)'; x.style.color = '#fff'; });
-          x.addEventListener('mouseleave', () => { x.style.background = ''; x.style.color = 'var(--text-muted)'; });
-          x.addEventListener('click', async (e) => { e.stopPropagation(); await tg.rm(); });
-        }
-        if (!isMobile) {
-          tag.style.cursor = 'pointer';
-          tag.addEventListener('mouseenter', () => {
-            let target = tg.group;
-            if (tg.group === 'snippet') {
-              target = '__ungrouped__';
-              for (const gName of this.settings.groupOrder) {
-                if (this.settings.groups[gName] && this.settings.groups[gName].includes(tg.label)) { target = gName; break; }
-              }
-            }
-            if (_ssCur === target && !searchInput.value) return;
-            searchInput.value = ''; _ssCur = target; updateAreas(); renderNav();
-          });
-        }
-      });
-    };
+    const renderState = async () => {};
 
+    const _specialNavIds = ['theme', '__ungrouped__', 'bg', 'font', 'memory'];
     const renderNav = () => {
       nav.empty();
       const addItem = (id, name, count, active) => {
@@ -4715,29 +5070,76 @@ class SwiftSwitchPlugin extends Plugin {
         if (!isMobile) {
           btn.addEventListener('mouseenter', () => { if (_ssCur === id && !searchInput.value) return; searchInput.value = ''; _ssCur = id; updateAreas(); renderNav(); });
         }
+        return btn;
       };
-      addItem('theme', t('theme.section'), '', true);
-      const _sep1 = nav.createDiv();
-      _sep1.style.cssText = 'height:1px;background:var(--background-modifier-border);margin:4px 0;';
+
       const orderedGroups = this.settings.groupOrder.filter(g => this.settings.groups[g] && g !== '__bg__');
-      for (const gName of orderedGroups) {
-        const members = this.settings.groups[gName] || [];
-        const cc = this.app.customCss;
-        const onCount = members.filter(n => cc && cc.enabledSnippets && cc.enabledSnippets.has(n)).length;
-        addItem(gName, gName, onCount > 0 ? onCount + '/' + members.length : String(members.length), onCount > 0);
-      }
+      const _allNavItems = ['theme', ...orderedGroups, '__ungrouped__', 'bg', 'font', 'memory'];
+      if (!Array.isArray(this.settings.navOrder)) this.settings.navOrder = [];
+      this.settings.navOrder = this.settings.navOrder.filter(id => _allNavItems.includes(id));
+      _allNavItems.forEach(id => { if (!this.settings.navOrder.includes(id)) this.settings.navOrder.push(id); });
+
       const _allSnippetFiles = this._getAllSnippetFilesSync();
       const _groupedSet = new Set();
       for (const members of Object.values(this.settings.groups)) { members.forEach(s => _groupedSet.add(s)); }
       const _ungroupedCount = _allSnippetFiles.filter(n => !_groupedSet.has(n)).length;
-      addItem('__ungrouped__', _currentLang === 'zh' ? '未分组 Snippets' : 'ungrouped Snippets', String(_ungroupedCount), false);
-      const _sep2 = nav.createDiv();
-      _sep2.style.cssText = 'height:1px;background:var(--background-modifier-border);margin:4px 0;';
       const _bgMembers = this.settings.groups['__bg__'] || [];
       const _bgColors = this.settings.customBgColors || [];
       const _bgCount = _bgMembers.length + _bgColors.length;
-      addItem('bg', t('eyeCare.section'), String(_bgCount), !!(this.settings.eyeCareColor));
-      addItem('font', t('font.section'), '', !!(this.settings.activeFont));
+      const cc = this.app.customCss;
+
+      const getItemInfo = (id) => {
+        if (id === 'theme') return { name: t('theme.section'), count: '', active: true };
+        if (id === '__ungrouped__') return { name: _currentLang === 'zh' ? '未分组 Snippets' : 'ungrouped Snippets', count: String(_ungroupedCount), active: false };
+        if (id === 'bg') return { name: t('eyeCare.section'), count: String(_bgCount), active: !!(this.settings.eyeCareColor) };
+        if (id === 'font') return { name: t('font.section'), count: '', active: !!(this.settings.activeFont) };
+        if (id === 'memory') return { name: t('memory.section'), count: String(Object.keys(this.settings.pageStyles || {}).length), active: !!(this.settings.styleMemory) };
+        const members = this.settings.groups[id] || [];
+        const onCount = members.filter(n => cc && cc.enabledSnippets && cc.enabledSnippets.has(n)).length;
+        return { name: id, count: onCount > 0 ? onCount + '/' + members.length : String(members.length), active: onCount > 0 };
+      };
+
+      let _dragSrcItem = null;
+      for (const itemId of this.settings.navOrder) {
+        const info = getItemInfo(itemId);
+        const btn = addItem(itemId, info.name, info.count, info.active);
+        if (btn && !isMobile) {
+          btn.draggable = true;
+          btn.addEventListener('dragstart', (e) => {
+            _dragSrcItem = itemId;
+            e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData('text/plain', itemId); } catch (_) {}
+            btn.style.opacity = '0.4';
+          });
+          btn.addEventListener('dragend', () => { btn.style.opacity = ''; _dragSrcItem = null; });
+          btn.addEventListener('dragover', (e) => {
+            if (!_dragSrcItem || _dragSrcItem === itemId) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            btn.style.background = 'rgba(var(--interactive-accent-rgb),0.2)';
+          });
+          btn.addEventListener('dragleave', () => {
+            if (_ssCur === itemId && !searchInput.value) return;
+            btn.style.background = '';
+          });
+          btn.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            btn.style.background = '';
+            if (!_dragSrcItem || _dragSrcItem === itemId) return;
+            const from = this.settings.navOrder.indexOf(_dragSrcItem);
+            const to = this.settings.navOrder.indexOf(itemId);
+            if (from === -1 || to === -1) return;
+            this.settings.navOrder.splice(from, 1);
+            this.settings.navOrder.splice(to, 0, _dragSrcItem);
+            const newOrder = this.settings.navOrder.filter(id => !_specialNavIds.includes(id) && this.settings.groups[id]);
+            for (const g of this.settings.groupOrder) { if (!newOrder.includes(g)) newOrder.push(g); }
+            this.settings.groupOrder = newOrder;
+            await this.saveSettings();
+            renderNav();
+          });
+        }
+      }
+
       if (!isMobile) {
         const addGroupBtn = nav.createEl('button');
         addGroupBtn.textContent = '+ ' + t('group.add');
@@ -4771,6 +5173,7 @@ class SwiftSwitchPlugin extends Plugin {
         }
       });
       if (!q && _ssCur === 'font') loadFontsIfNeeded();
+      if (!q && _ssCur === 'memory') renderMemory();
       if (q || isGroup) renderContent();
     };
 
@@ -4778,6 +5181,7 @@ class SwiftSwitchPlugin extends Plugin {
 
     const renderAll = async () => { await renderState(); renderNav(); updateAreas(); };
     popup._ssRenderAll = renderAll;
+    popup._ssRenderNav = renderNav;
 
     renderAll();
     const footer = popup.createDiv();
@@ -5066,6 +5470,10 @@ class SwiftSwitchPlugin extends Plugin {
         this.settings.groups[newName] = members;
         const idx = this.settings.groupOrder.indexOf(groupName);
         if (idx !== -1) this.settings.groupOrder[idx] = newName;
+        if (Array.isArray(this.settings.navOrder)) {
+          const ni = this.settings.navOrder.indexOf(groupName);
+          if (ni !== -1) this.settings.navOrder[ni] = newName;
+        }
         if (this.settings.collapsedGroups[groupName] !== undefined) {
           this.settings.collapsedGroups[newName] = this.settings.collapsedGroups[groupName];
           delete this.settings.collapsedGroups[groupName];
@@ -5094,6 +5502,7 @@ class SwiftSwitchPlugin extends Plugin {
     mkItem(t('context.deleteGroup'), async () => {
       delete this.settings.groups[groupName];
       this.settings.groupOrder = this.settings.groupOrder.filter(n => n !== groupName);
+      if (Array.isArray(this.settings.navOrder)) this.settings.navOrder = this.settings.navOrder.filter(n => n !== groupName);
       delete this.settings.collapsedGroups[groupName];
       await this.saveSettings();
       rerender();
@@ -5201,6 +5610,8 @@ class SwiftSwitchPlugin extends Plugin {
           });
         }
       }
+      const _popupEl = document.getElementById('ss-snippets-popup');
+      if (_popupEl && _popupEl._ssRenderNav) _popupEl._ssRenderNav();
     });
 
     const buildSnippetOpts = () => {
