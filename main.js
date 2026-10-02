@@ -86,6 +86,14 @@ const i18n = {
     'eyeCare.mint': '薄荷',
     'eyeCare.beige': '米色',
     'eyeCare.sepia': '羊皮纸',
+    'eyeCare.lavender': '淡紫',
+    'eyeCare.rose': '玫瑰',
+    'eyeCare.sky': '天蓝',
+    'eyeCare.sand': '沙色',
+    'eyeCare.sage': '鼠尾草',
+    'eyeCare.blush': '腮红',
+    'eyeCare.ivory': '象牙',
+    'eyeCare.fog': '雾灰',
     'eyeCare.linen': '亚麻纹',
     'eyeCare.dot': '波点',
     'eyeCare.grid': '方格',
@@ -136,6 +144,32 @@ const i18n = {
     'settings.modeLight': '浅色',
     'settings.title': '设置',
     'settings.autoBgByName': '打开文档时使用同名图片作背景',
+    'settings.tabHeaderWheelTheme': '标签页标题栏滚轮切换主题',
+    'settings.wheelGroups': '悬浮按钮滚轮切换分组',
+    'settings.wheelGroupsHint': '勾选普通滚轮循环切换的分组',
+    'settings.chipHoverHint': 'Chip 悬停提示',
+    'settings.hoverPreview': '悬停预览',
+    'settings.hoverDelay': '悬停延时(ms)',
+    'preset.section': '组合',
+    'preset.saveCurrent': '保存当前',
+    'preset.empty': '暂无组合',
+    'preset.namePrompt': '组合名称',
+    'preset.applied': '已应用组合',
+    'preset.saved': '组合已保存',
+    'preset.deleted': '组合已删除',
+    'preset.overwrite': '覆盖更新',
+    'preset.rename': '重命名',
+    'preset.delete': '删除',
+    'preset.deleteConfirm': '确定删除组合「{0}」？',
+    'preset.overwriteConfirm': '确定用当前风格覆盖组合「{0}」？',
+    'navBox.appearance': '外观',
+    'navBox.snippets': 'Snippets',
+    'navBox.system': '系统',
+    'navBox.addBox': '新建分区',
+    'navBox.titlePrompt': '分区标题',
+    'navBox.deleteBox': '删除分区',
+    'navBox.deleteConfirm': '确定删除分区「{0}」？其中的项目将移回默认分区。',
+    'navBox.untitled': '未命名',
     'styleMemory.chip': '记忆模式',
     'styleMemory.hint': '记忆模式：记住每个页面的风格，切换时自动恢复',
     'styleMemory.on': '记忆模式已开启',
@@ -262,6 +296,14 @@ const i18n = {
     'eyeCare.mint': 'Mint',
     'eyeCare.beige': 'Beige',
     'eyeCare.sepia': 'Sepia',
+    'eyeCare.lavender': 'Lavender',
+    'eyeCare.rose': 'Rose',
+    'eyeCare.sky': 'Sky',
+    'eyeCare.sand': 'Sand',
+    'eyeCare.sage': 'Sage',
+    'eyeCare.blush': 'Blush',
+    'eyeCare.ivory': 'Ivory',
+    'eyeCare.fog': 'Fog',
     'eyeCare.linen': 'Linen',
     'eyeCare.dot': 'Dots',
     'eyeCare.grid': 'Grid',
@@ -312,6 +354,32 @@ const i18n = {
     'settings.modeLight': 'Light',
     'settings.title': 'Settings',
     'settings.autoBgByName': 'Use same-name image as background on document open',
+    'settings.tabHeaderWheelTheme': 'Wheel on tab header to switch theme',
+    'settings.wheelGroups': 'Wheel Switch Groups',
+    'settings.wheelGroupsHint': 'Select groups to cycle through with wheel',
+    'settings.chipHoverHint': 'Chip Hover Hint',
+    'settings.hoverPreview': 'Hover Preview',
+    'settings.hoverDelay': 'Hover Delay (ms)',
+    'preset.section': 'Presets',
+    'preset.saveCurrent': 'Save Current',
+    'preset.empty': 'No presets',
+    'preset.namePrompt': 'Preset name',
+    'preset.applied': 'Preset applied',
+    'preset.saved': 'Preset saved',
+    'preset.deleted': 'Preset deleted',
+    'preset.overwrite': 'Overwrite',
+    'preset.rename': 'Rename',
+    'preset.delete': 'Delete',
+    'preset.deleteConfirm': 'Delete preset "{0}"?',
+    'preset.overwriteConfirm': 'Overwrite preset "{0}" with current style?',
+    'navBox.appearance': 'Appearance',
+    'navBox.snippets': 'Snippets',
+    'navBox.system': 'System',
+    'navBox.addBox': 'New section',
+    'navBox.titlePrompt': 'Section title',
+    'navBox.deleteBox': 'Delete section',
+    'navBox.deleteConfirm': 'Delete section "{0}"? Items will move back to default section.',
+    'navBox.untitled': 'Untitled',
     'styleMemory.chip': 'Memory Mode',
     'styleMemory.hint': 'Memory mode: remember each page style, auto-restore on switch',
     'styleMemory.on': 'Memory mode on',
@@ -400,20 +468,20 @@ class SwiftSwitchPlugin extends Plugin {
     // 滚轮切换主题
     this._statusBarEl.addEventListener('wheel', async (e) => {
       e.preventDefault();
-      const { currentTheme, themeDirs } = await this.getThemeInfo();
-      if (themeDirs.length === 0) return;
-      // 构建列表：默认 + 已安装主题
-      const list = [''].concat(themeDirs);
-      const idx = list.indexOf(currentTheme);
-      let nextIdx;
-      if (e.deltaY > 0) {
-        nextIdx = idx < list.length - 1 ? idx + 1 : 0;
-      } else {
-        nextIdx = idx > 0 ? idx - 1 : list.length - 1;
-      }
-      await this.switchTheme(list[nextIdx]);
-      this._refreshPopupIfNeeded();
+      await this._wheelSwitchTheme(e.deltaY > 0);
     });
+
+    // 标签页标题栏滚轮切换主题
+    this.registerDomEvent(document, 'wheel', (e) => {
+      if (!this.settings.tabHeaderWheelTheme) return;
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      const tabHeader = target.closest('.workspace-tab-header, .workspace-tab-header-container, .workspace-tab-header-inner');
+      if (!tabHeader) return;
+      if (target.closest('#ss-snippets-popup, .ss-floating-button, .modal, .modal-bg')) return;
+      e.preventDefault();
+      this._showThemeWheelPopup(e.clientX, e.clientY, e.deltaY > 0);
+    }, { passive: false });
 
     this.addCommand({
       id: 'open-snippets-popup',
@@ -563,6 +631,13 @@ class SwiftSwitchPlugin extends Plugin {
       defaultThemeMode: '',      // 新页面默认深浅模式（空=不切换, 'dark'=深色, 'light'=浅色）
       defaultEyeCareMode: '',    // 新页面默认背景深浅模式（空=不切换, 'dark'=深色, 'light'=浅色）
       autoBgByName: false,       // 打开文档时使用同名图片作背景
+      tabHeaderWheelTheme: false, // 标签页标题栏滚轮切换主题
+      wheelGroups: ['__bg__'],   // 悬浮按钮普通滚轮循环切换的分组
+      chipHoverHint: true,       // Chip 悬停提示开关
+      hoverPreview: true,        // 悬停预览开关
+      hoverDelay: 0,             // 悬停预览延时(ms)
+      stylePresets: {},          // { name: { theme, isDark, eyeCareColor, activeFont, ... } } 风格组合
+      navBoxes: null,            // [{ id, title, items[], auto? }] 分框配置; null=默认三框
     }, data);
   }
 
@@ -697,6 +772,243 @@ class SwiftSwitchPlugin extends Plugin {
         this.app.customCss.theme = themeName;
       }
     } catch (_e) {}
+  }
+
+
+  // ─── 悬停预览绑定（开关+延时）──────────────────────────────────────────
+  _bindHoverPreview(el, enterFn, leaveFn) {
+    let _timer = null;
+    el.addEventListener('mouseenter', () => {
+      if (!this.settings.hoverPreview) return;
+      const d = this.settings.hoverDelay || 0;
+      if (d > 0) { _timer = setTimeout(() => { _timer = null; enterFn(); }, d); }
+      else { enterFn(); }
+    });
+    el.addEventListener('mouseleave', () => {
+      if (_timer) { clearTimeout(_timer); _timer = null; return; }
+      if (leaveFn) leaveFn();
+    });
+  }
+
+  // ─── 滚轮切换主题（forward=true 下一个，false 上一个）─────────────────
+  async _wheelSwitchTheme(forward) {
+    const { currentTheme, themeDirs } = await this.getThemeInfo();
+    if (themeDirs.length === 0) return;
+    const list = [''].concat(themeDirs);
+    const idx = list.indexOf(currentTheme);
+    let nextIdx;
+    if (forward) {
+      nextIdx = idx < list.length - 1 ? idx + 1 : 0;
+    } else {
+      nextIdx = idx > 0 ? idx - 1 : list.length - 1;
+    }
+    await this.switchTheme(list[nextIdx]);
+    this._refreshPopupIfNeeded();
+  }
+
+  async _showThemeWheelPopup(x, y, forward) {
+    const _twDark = !!(document.body.classList.contains('theme-dark') || window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const _twBg = _twDark ? '#262624' : '#fcfbf8';
+    const _twBorder = _twDark ? '#3b3b37' : '#dedbd3';
+    const _twText = _twDark ? '#e8e6e0' : '#2b2a27';
+    const _twMute = _twDark ? '#8f8c84' : '#8d8a82';
+    const _twAccent = _twDark ? '#8fc2ad' : '#4f7a6a';
+
+    const _applyItemStyle = (item, isSel) => {
+      item.style.setProperty('padding', '6px 14px', 'important');
+      item.style.setProperty('min-height', '32px', 'important');
+      item.style.setProperty('box-sizing', 'border-box', 'important');
+      item.style.setProperty('border-radius', '4px');
+      item.style.setProperty('font-size', '13px');
+      item.style.setProperty('line-height', '1.4');
+      item.style.setProperty('white-space', 'nowrap');
+      item.style.setProperty('overflow', 'hidden');
+      item.style.setProperty('text-overflow', 'ellipsis');
+      item.style.setProperty('display', 'flex', 'important');
+      item.style.setProperty('align-items', 'center', 'important');
+      item.style.setProperty('cursor', 'pointer');
+      item.style.background = isSel ? _twAccent : '';
+      item.style.color = isSel ? '#fff' : _twText;
+      item.style.fontWeight = isSel ? '600' : 'normal';
+    };
+
+    let pop = document.getElementById('ss-theme-wheel-popup');
+    if (!pop) {
+      const { currentTheme, themeDirs } = await this.getThemeInfo();
+      const list = [''].concat(themeDirs);
+      pop = document.createElement('div');
+      pop.id = 'ss-theme-wheel-popup';
+      pop.style.cssText = `position:fixed;z-index:10005;background:${_twBg};border:1px solid ${_twBorder};border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:8px;min-width:240px;max-width:340px;display:flex;flex-direction:column;gap:4px;`;
+      pop._themes = list;
+      pop._currentIdx = list.indexOf(currentTheme);
+      document.body.appendChild(pop);
+      const title = pop.createEl('div');
+      title.style.cssText = `font-size:11px;font-weight:600;color:${_twMute};padding:0 4px;margin-bottom:2px;`;
+      title.textContent = _currentLang === 'zh' ? '主题列表' : 'Themes';
+      const listEl = pop.createEl('div');
+      listEl.style.cssText = 'overflow-y:auto;max-height:300px;display:flex;flex-direction:column;gap:2px;';
+      list.forEach((theme, i) => {
+        const item = listEl.createEl('div');
+        item.textContent = theme || t('eyeCare.default');
+        item._themeIdx = i;
+        _applyItemStyle(item, i === pop._currentIdx);
+        item.addEventListener('click', async () => {
+          pop._currentIdx = i;
+          await this.switchTheme(pop._themes[i]);
+          this._refreshPopupIfNeeded();
+          pop._listEl.querySelectorAll('div').forEach(el => { _applyItemStyle(el, el._themeIdx === i); });
+        });
+      });
+      pop._listEl = listEl;
+      pop._moveHandler = (ev) => {
+        if (pop.contains(ev.target)) return;
+        const rect = pop.getBoundingClientRect();
+        const dx = Math.max(0, Math.max(rect.left - ev.clientX, ev.clientX - rect.right));
+        const dy = Math.max(0, Math.max(rect.top - ev.clientY, ev.clientY - rect.bottom));
+        if (Math.max(dx, dy) > 20) { document.removeEventListener('mousemove', pop._moveHandler); pop.remove(); }
+      };
+      document.addEventListener('mousemove', pop._moveHandler);
+    }
+    if (forward) pop._currentIdx = pop._currentIdx < pop._themes.length - 1 ? pop._currentIdx + 1 : 0;
+    else pop._currentIdx = pop._currentIdx > 0 ? pop._currentIdx - 1 : pop._themes.length - 1;
+    pop._listEl.querySelectorAll('div').forEach(item => { _applyItemStyle(item, item._themeIdx === pop._currentIdx); });
+    const items = pop._listEl.querySelectorAll('div');
+    if (items[pop._currentIdx]) items[pop._currentIdx].scrollIntoView({ block: 'nearest' });
+    pop.style.left = Math.min(x + 14, window.innerWidth - 360) + 'px';
+    pop.style.top = Math.min(y + 14, window.innerHeight - 360) + 'px';
+    await this.switchTheme(pop._themes[pop._currentIdx]);
+    this._refreshPopupIfNeeded();
+  }
+
+  async _showGroupWheelPopup(x, y, forward) {
+    const _gwDark = !!(document.body.classList.contains('theme-dark') || window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const _gwBg = _gwDark ? '#262624' : '#fcfbf8';
+    const _gwBorder = _gwDark ? '#3b3b37' : '#dedbd3';
+    const _gwText = _gwDark ? '#e8e6e0' : '#2b2a27';
+    const _gwMute = _gwDark ? '#8f8c84' : '#8d8a82';
+    const _gwAccent = _gwDark ? '#8fc2ad' : '#4f7a6a';
+
+    const wheelGroups = Array.isArray(this.settings.wheelGroups) && this.settings.wheelGroups.length > 0
+      ? this.settings.wheelGroups : ['__bg__'];
+    const { enabledSnippets } = await this.getSnippetInfo();
+    const bgImgs = this.settings.bgImages || [];
+    const bgCustomColors = this.settings.customBgColors || [];
+    const items = [];
+    wheelGroups.forEach(gName => {
+      const members = this.settings.groups[gName] || [];
+      members.forEach(name => items.push({ type: 'snippet', name, group: gName }));
+      if (gName === '__bg__') {
+        bgImgs.forEach((_, i) => items.push({ type: 'img', idx: i, group: gName }));
+        bgCustomColors.forEach((_, i) => items.push({ type: 'customcolor', idx: i, group: gName }));
+      }
+    });
+    if (items.length === 0) return;
+
+    const _itemLabel = (it) => {
+      if (it.type === 'snippet') return it.name;
+      if (it.type === 'img') return bgImgs[it.idx]?.label || bgImgs[it.idx]?.url || `Image ${it.idx + 1}`;
+      if (it.type === 'customcolor') return bgCustomColors[it.idx] || `Color ${it.idx + 1}`;
+      return '';
+    };
+
+    let activeItemIdx = -1;
+    const currentImgIdx = this.settings.eyeCareColor?.startsWith('__img_') ? parseInt(this.settings.eyeCareColor.slice(6), 10) : -1;
+    const currentColorIdx = this.settings.eyeCareColor?.startsWith('__customcolor_') ? parseInt(this.settings.eyeCareColor.slice(14), 10) : -1;
+    if (currentColorIdx >= 0) {
+      activeItemIdx = items.findIndex(it => it.type === 'customcolor' && it.idx === currentColorIdx);
+    } else if (currentImgIdx >= 0) {
+      activeItemIdx = items.findIndex(it => it.type === 'img' && it.idx === currentImgIdx);
+    } else {
+      for (let i = items.length - 1; i >= 0; i--) {
+        if (items[i].type === 'snippet' && enabledSnippets.includes(items[i].name)) { activeItemIdx = i; break; }
+      }
+    }
+
+    const _applyItemStyle = (item, isSel) => {
+      item.style.setProperty('padding', '6px 14px', 'important');
+      item.style.setProperty('min-height', '32px', 'important');
+      item.style.setProperty('box-sizing', 'border-box', 'important');
+      item.style.setProperty('border-radius', '4px');
+      item.style.setProperty('font-size', '13px');
+      item.style.setProperty('line-height', '1.4');
+      item.style.setProperty('white-space', 'nowrap');
+      item.style.setProperty('overflow', 'hidden');
+      item.style.setProperty('text-overflow', 'ellipsis');
+      item.style.setProperty('display', 'flex', 'important');
+      item.style.setProperty('align-items', 'center', 'important');
+      item.style.setProperty('cursor', 'pointer');
+      item.style.background = isSel ? _gwAccent : '';
+      item.style.color = isSel ? '#fff' : _gwText;
+      item.style.fontWeight = isSel ? '600' : 'normal';
+    };
+
+    const _switchToItem = async (idx) => {
+      wheelGroups.forEach(gName => {
+        const members = this.settings.groups[gName] || [];
+        members.forEach(name => { if (enabledSnippets.includes(name)) this._setSnippetEnabled(name, false); });
+      });
+      if (this.settings.eyeCareColor?.startsWith('__img_') || this.settings.eyeCareColor?.startsWith('__customcolor_')) {
+        this.settings.eyeCareColor = '';
+        this.applyEyeCareColor();
+      }
+      const it = items[idx];
+      if (it.type === 'snippet') {
+        this._setSnippetEnabled(it.name, true);
+      } else if (it.type === 'img') {
+        this.settings.eyeCareColor = `__img_${it.idx}`;
+        this.applyEyeCareColor();
+      } else if (it.type === 'customcolor') {
+        this.settings.eyeCareColor = `__customcolor_${it.idx}`;
+        this.applyEyeCareColor();
+      }
+      await this.saveSettings();
+      if (this.settings.styleMemory && this._lastFilePath) {
+        await this._savePageStyle(this._lastFilePath);
+      }
+      this._refreshPopupIfNeeded();
+    };
+
+    let pop = document.getElementById('ss-group-wheel-popup');
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.id = 'ss-group-wheel-popup';
+      pop.style.cssText = `position:fixed;z-index:10005;background:${_gwBg};border:1px solid ${_gwBorder};border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:8px;min-width:240px;max-width:340px;display:flex;flex-direction:column;gap:4px;`;
+      pop._currentIdx = activeItemIdx;
+      document.body.appendChild(pop);
+      const title = pop.createEl('div');
+      title.style.cssText = `font-size:11px;font-weight:600;color:${_gwMute};padding:0 4px;margin-bottom:2px;`;
+      title.textContent = _currentLang === 'zh' ? '分组列表' : 'Groups';
+      const listEl = pop.createEl('div');
+      listEl.style.cssText = 'overflow-y:auto;max-height:300px;display:flex;flex-direction:column;gap:2px;';
+      items.forEach((it, i) => {
+        const item = listEl.createEl('div');
+        item.textContent = _itemLabel(it);
+        item._itemIdx = i;
+        _applyItemStyle(item, i === activeItemIdx);
+        item.addEventListener('click', async () => {
+          pop._currentIdx = i;
+          await _switchToItem(i);
+          pop._listEl.querySelectorAll('div').forEach(el => { _applyItemStyle(el, el._itemIdx === i); });
+        });
+      });
+      pop._listEl = listEl;
+      pop._moveHandler = (ev) => {
+        if (pop.contains(ev.target)) return;
+        const rect = pop.getBoundingClientRect();
+        const dx = Math.max(0, Math.max(rect.left - ev.clientX, ev.clientX - rect.right));
+        const dy = Math.max(0, Math.max(rect.top - ev.clientY, ev.clientY - rect.bottom));
+        if (Math.max(dx, dy) > 20) { document.removeEventListener('mousemove', pop._moveHandler); pop.remove(); }
+      };
+      document.addEventListener('mousemove', pop._moveHandler);
+    }
+    if (forward) pop._currentIdx = pop._currentIdx < items.length - 1 ? pop._currentIdx + 1 : 0;
+    else pop._currentIdx = pop._currentIdx > 0 ? pop._currentIdx - 1 : items.length - 1;
+    pop._listEl.querySelectorAll('div').forEach(item => { _applyItemStyle(item, item._itemIdx === pop._currentIdx); });
+    const listItems = pop._listEl.querySelectorAll('div');
+    if (listItems[pop._currentIdx]) listItems[pop._currentIdx].scrollIntoView({ block: 'nearest' });
+    pop.style.left = Math.min(x + 14, window.innerWidth - 360) + 'px';
+    pop.style.top = Math.min(y + 14, window.innerHeight - 360) + 'px';
+    await _switchToItem(pop._currentIdx);
   }
 
   // ─── 记忆使用者弹层 ──────────────────────────────────────────────────
@@ -1210,6 +1522,14 @@ class SwiftSwitchPlugin extends Plugin {
       mint:  { bg: '#e0f2f1', bgSec: '#d0eceb', bgMod: '#b2dfdb', darkBg: '#1e2a29', darkBgSec: '#243230', darkBgMod: '#2a3a37' },
       beige: { bg: '#f5f0e8', bgSec: '#ebe5d9', bgMod: '#e0d9cc', darkBg: '#2a2620', darkBgSec: '#322e26', darkBgMod: '#3a362c' },
       sepia: { bg: '#f4ecd8', bgSec: '#ebe3c6', bgMod: '#ddd4b4', darkBg: '#2a2618', darkBgSec: '#322e20', darkBgMod: '#3a3628' },
+      lavender: { bg: '#f3f0f7', bgSec: '#e8e4ef', bgMod: '#ddd8e7', darkBg: '#2a2630', darkBgSec: '#322e36', darkBgMod: '#3a363e' },
+      rose: { bg: '#fce8ec', bgSec: '#f5dce2', bgMod: '#edd0d8', darkBg: '#2e2024', darkBgSec: '#362428', darkBgMod: '#3e2a2e' },
+      sky: { bg: '#e8f0f7', bgSec: '#dce8f3', bgMod: '#d0dcef', darkBg: '#1e2430', darkBgSec: '#242a36', darkBgMod: '#2a303e' },
+      sand: { bg: '#f6f0e4', bgSec: '#ede7db', bgMod: '#e2dccc', darkBg: '#2a261e', darkBgSec: '#322e24', darkBgMod: '#3a362a' },
+      sage: { bg: '#e8f0e8', bgSec: '#dce8dc', bgMod: '#d0ddd0', darkBg: '#1e2820', darkBgSec: '#243026', darkBgMod: '#2a382c' },
+      blush: { bg: '#fce4ec', bgSec: '#f5d8e2', bgMod: '#edccd6', darkBg: '#2e1e24', darkBgSec: '#362428', darkBgMod: '#3e2a2e' },
+      ivory: { bg: '#fffef0', bgSec: '#faf9e0', bgMod: '#f0efcc', darkBg: '#2a2a1e', darkBgSec: '#323024', darkBgMod: '#3a382a' },
+      fog: { bg: '#eef0f0', bgSec: '#e4e6e6', bgMod: '#d8dadc', darkBg: '#222424', darkBgSec: '#2a2c2c', darkBgMod: '#323434' },
     };
 
     const patterns = {
@@ -1558,6 +1878,14 @@ class SwiftSwitchPlugin extends Plugin {
       { key: 'mint',   color: '#e0f2f1', darkColor: '#1e2a29', label: t('eyeCare.mint') },
       { key: 'beige',  color: '#f5f0e8', darkColor: '#2a2620', label: t('eyeCare.beige') },
       { key: 'sepia',  color: '#f4ecd8', darkColor: '#2a2618', label: t('eyeCare.sepia') },
+      { key: 'lavender', color: '#f3f0f7', darkColor: '#2a2630', label: t('eyeCare.lavender') },
+      { key: 'rose',  color: '#fce8ec', darkColor: '#2e2024', label: t('eyeCare.rose') },
+      { key: 'sky',   color: '#e8f0f7', darkColor: '#1e2430', label: t('eyeCare.sky') },
+      { key: 'sand',  color: '#f6f0e4', darkColor: '#2a261e', label: t('eyeCare.sand') },
+      { key: 'sage',  color: '#e8f0e8', darkColor: '#1e2820', label: t('eyeCare.sage') },
+      { key: 'blush', color: '#fce4ec', darkColor: '#2e1e24', label: t('eyeCare.blush') },
+      { key: 'ivory', color: '#fffef0', darkColor: '#2a2a1e', label: t('eyeCare.ivory') },
+      { key: 'fog',   color: '#eef0f0', darkColor: '#222424', label: t('eyeCare.fog') },
       { key: 'linen',  color: '#f5f0e8', darkColor: '#2a2620', label: t('eyeCare.linen'),  pattern: 'linen' },
       { key: 'dot',    color: '#f0ece4', darkColor: '#28241e', label: t('eyeCare.dot'),    pattern: 'dot' },
       { key: 'grid',   color: '#f5f2eb', darkColor: '#282620', label: t('eyeCare.grid'),   pattern: 'grid' },
@@ -1763,81 +2091,13 @@ class SwiftSwitchPlugin extends Plugin {
       }
     });
 
-    // 滚轮：普通切换护眼色，Ctrl/Shift切换主题
+    // 滚轮：普通切换选中分组（弹出列表），Ctrl/Shift弹出主题列表
     btn.addEventListener('wheel', async (e) => {
       e.preventDefault();
       if (e.ctrlKey || e.shiftKey) {
-        // Ctrl/Shift+滚轮：切换主题
-      let { currentTheme, themeDirs } = await this.getThemeInfo();
-        if (themeDirs.length === 0) return;
-        const list = [''].concat(themeDirs);
-        const idx = list.indexOf(currentTheme);
-        let nextIdx;
-        if (e.deltaY > 0) {
-          nextIdx = idx < list.length - 1 ? idx + 1 : 0;
-        } else {
-          nextIdx = idx > 0 ? idx - 1 : list.length - 1;
-        }
-        await this.switchTheme(list[nextIdx]);
-        this._refreshPopupIfNeeded();
+        this._showThemeWheelPopup(e.clientX, e.clientY, e.deltaY > 0);
       } else {
-        const bgGroupName = '__bg__';
-        const bgMembers = this.settings.groups[bgGroupName] || [];
-        const bgImgs = this.settings.bgImages || [];
-        const bgCustomColors = this.settings.customBgColors || [];
-        if (bgMembers.length === 0 && bgImgs.length === 0 && bgCustomColors.length === 0) return;
-        const { enabledSnippets } = await this.getSnippetInfo();
-        const enabledBg = bgMembers.filter(n => enabledSnippets.includes(n));
-        const currentIdx = bgMembers.indexOf(enabledBg[enabledBg.length - 1] || '');
-        const currentImgIdx = this.settings.eyeCareColor?.startsWith('__img_') ? parseInt(this.settings.eyeCareColor.slice(6), 10) : -1;
-        const currentColorIdx = this.settings.eyeCareColor?.startsWith('__customcolor_') ? parseInt(this.settings.eyeCareColor.slice(14), 10) : -1;
-        const items = [];
-        bgMembers.forEach((name, i) => items.push({ type: 'snippet', name, idx: i }));
-        bgImgs.forEach((_, i) => items.push({ type: 'img', idx: i }));
-        bgCustomColors.forEach((_, i) => items.push({ type: 'customcolor', idx: i }));
-        let activeItemIdx = -1;
-        if (currentColorIdx >= 0) {
-          activeItemIdx = items.findIndex(it => it.type === 'customcolor' && it.idx === currentColorIdx);
-        } else if (currentImgIdx >= 0) {
-          activeItemIdx = items.findIndex(it => it.type === 'img' && it.idx === currentImgIdx);
-        } else if (currentIdx >= 0) {
-          activeItemIdx = items.findIndex(it => it.type === 'snippet' && it.idx === currentIdx);
-        }
-        let nextItemIdx;
-        if (e.deltaY > 0) {
-          nextItemIdx = activeItemIdx < 0 ? 0 : (activeItemIdx < items.length - 1 ? activeItemIdx + 1 : 0);
-        } else {
-          nextItemIdx = activeItemIdx < 0 ? items.length - 1 : (activeItemIdx > 0 ? activeItemIdx - 1 : items.length - 1);
-        }
-        for (const name of enabledBg) {
-          this._setSnippetEnabled(name, false);
-        }
-        if (this.settings.eyeCareColor?.startsWith('__img_') || this.settings.eyeCareColor?.startsWith('__customcolor_')) {
-          this.settings.eyeCareColor = '';
-          this.applyEyeCareColor();
-        }
-        if (nextItemIdx >= 0) {
-          const nextItem = items[nextItemIdx];
-          if (nextItem.type === 'snippet') {
-            this._setSnippetEnabled(nextItem.name, true);
-            new Notice(nextItem.name);
-          } else if (nextItem.type === 'img') {
-            this.settings.eyeCareColor = `__img_${nextItem.idx}`;
-            this.applyEyeCareColor();
-            new Notice(bgImgs[nextItem.idx].label || bgImgs[nextItem.idx].url);
-          } else if (nextItem.type === 'customcolor') {
-            this.settings.eyeCareColor = `__customcolor_${nextItem.idx}`;
-            this.applyEyeCareColor();
-            new Notice(bgCustomColors[nextItem.idx]);
-          }
-        } else {
-          new Notice(t('eyeCare.default'));
-        }
-        await this.saveSettings();
-        if (this.settings.styleMemory && this._lastFilePath) {
-          await this._savePageStyle(this._lastFilePath);
-        }
-        this._refreshPopupIfNeeded();
+        this._showGroupWheelPopup(e.clientX, e.clientY, e.deltaY > 0);
       }
     }, { passive: false });
 
@@ -2421,6 +2681,39 @@ class SwiftSwitchPlugin extends Plugin {
     };
   }
 
+  // ─── 应用风格组合 ──────────────────────────────────────────────────
+  async _applyPreset(preset) {
+    if (!preset) return;
+    try {
+      if (preset.theme !== undefined) {
+        await this.switchTheme(preset.theme, true);
+      }
+      if (preset.isDark !== undefined) {
+        const currentIsDark = document.body.classList.contains('theme-dark');
+        if (currentIsDark !== preset.isDark) await this.toggleMode(true);
+      }
+      if (preset.eyeCareColor !== undefined) {
+        this.settings.eyeCareColor = preset.eyeCareColor;
+        this.applyEyeCareColor();
+      }
+      if (preset.enabledSnippets && Array.isArray(preset.enabledSnippets)) {
+        const { snippetFiles } = await this.getSnippetInfo();
+        for (const name of snippetFiles) {
+          this._setSnippetEnabled(name, preset.enabledSnippets.includes(name));
+        }
+      }
+      if (preset.activeFont !== undefined) this.settings.activeFont = preset.activeFont;
+      if (preset.fontDisabled !== undefined) this._fontDisabled = preset.fontDisabled;
+      if (preset.fontColor !== undefined) this.settings.fontColor = preset.fontColor;
+      if (preset.fontOpacity !== undefined) this.settings.fontOpacity = preset.fontOpacity;
+      if (preset.fontLineHeight !== undefined) this.settings.fontLineHeight = preset.fontLineHeight;
+      if (preset.fontMarginL !== undefined) this.settings.fontMarginL = preset.fontMarginL;
+      if (preset.fontMarginR !== undefined) this.settings.fontMarginR = preset.fontMarginR;
+      this.applyFontSettings();
+      await this.saveSettings();
+    } catch (_e) {}
+  }
+
   // ─── 保存当前页面风格 ──────────────────────────────────────────────────
   async _savePageStyle(filePath) {
     if (!filePath || !this.settings.styleMemory) return;
@@ -2606,6 +2899,7 @@ class SwiftSwitchPlugin extends Plugin {
 
   _attachSsChipHover(chip, buildOpts) {
     if (isMobile) return;
+    if (!this.settings.chipHoverHint) return;
     chip.addEventListener('mouseenter', () => {
       if (this._ssChipTooltipTimer) { clearTimeout(this._ssChipTooltipTimer); this._ssChipTooltipTimer = null; }
       this._showSsChipTooltip(chip, buildOpts());
@@ -2738,6 +3032,66 @@ class SwiftSwitchPlugin extends Plugin {
         popup.style.top = Math.round((window.innerHeight - h) / 2) + 'px';
       });
     }
+
+    // ── 固定配色，不跟随主题 ──────────────────────────────────────────
+    const _isDark = !!(document.body.classList.contains('theme-dark') ||
+                       (this.app.getThemeManager && this.app.getThemeManager().isDark) ||
+                       getComputedStyle(document.body).colorScheme === 'dark' ||
+                       window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const _ssFixed = _isDark ? {
+      '--mono-rgb-0': '38, 38, 36',
+      '--ss-popup-bg': '#262624',
+      '--background-primary': '#262624',
+      '--background-secondary': '#2c2c29',
+      '--background-modifier-border': '#3b3b37',
+      '--background-modifier-hover': '#383834',
+      '--text-normal': '#e8e6e0',
+      '--text-muted': '#8f8c84',
+      '--text-faint': '#5c5a54',
+      '--interactive-accent': '#8fc2ad',
+      '--interactive-accent-rgb': '143, 194, 173',
+      '--text-error': '#e0728b',
+    } : {
+      '--mono-rgb-0': '252, 251, 248',
+      '--ss-popup-bg': '#fcfbf8',
+      '--background-primary': '#fcfbf8',
+      '--background-secondary': '#f4f2ed',
+      '--background-modifier-border': '#dedbd3',
+      '--background-modifier-hover': '#ebe8e1',
+      '--text-normal': '#2b2a27',
+      '--text-muted': '#8d8a82',
+      '--text-faint': '#b8b5ac',
+      '--interactive-accent': '#4f7a6a',
+      '--interactive-accent-rgb': '79, 122, 106',
+      '--text-error': '#b0405a',
+    };
+    for (const [k, v] of Object.entries(_ssFixed)) popup.style.setProperty(k, v);
+    popup.style.background = _ssFixed['--ss-popup-bg'];
+
+    const _ssApplyFixedColors = () => {
+      const dark = !!(document.body.classList.contains('theme-dark') ||
+                       (this.app.getThemeManager && this.app.getThemeManager().isDark) ||
+                       window.matchMedia('(prefers-color-scheme: dark)').matches);
+      const fixed = dark ? {
+        '--mono-rgb-0': '38, 38, 36', '--ss-popup-bg': '#262624',
+        '--background-primary': '#262624', '--background-secondary': '#2c2c29',
+        '--background-modifier-border': '#3b3b37', '--background-modifier-hover': '#383834',
+        '--text-normal': '#e8e6e0', '--text-muted': '#8f8c84', '--text-faint': '#5c5a54',
+        '--interactive-accent': '#8fc2ad', '--interactive-accent-rgb': '143, 194, 173',
+        '--text-error': '#e0728b',
+      } : {
+        '--mono-rgb-0': '252, 251, 248', '--ss-popup-bg': '#fcfbf8',
+        '--background-primary': '#fcfbf8', '--background-secondary': '#f4f2ed',
+        '--background-modifier-border': '#dedbd3', '--background-modifier-hover': '#ebe8e1',
+        '--text-normal': '#2b2a27', '--text-muted': '#8d8a82', '--text-faint': '#b8b5ac',
+        '--interactive-accent': '#4f7a6a', '--interactive-accent-rgb': '79, 122, 106',
+        '--text-error': '#b0405a',
+      };
+      for (const [k, v] of Object.entries(fixed)) popup.style.setProperty(k, v);
+      popup.style.background = fixed['--ss-popup-bg'];
+    };
+    const _ssThemeObserver = new MutationObserver(() => { if (document.body.contains(popup)) _ssApplyFixedColors(); else _ssThemeObserver.disconnect(); });
+    _ssThemeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
     // ── 头部 ──────────────────────────────────────────────────────────
     const header = popup.createDiv();
@@ -3083,16 +3437,10 @@ class SwiftSwitchPlugin extends Plugin {
           this._showMemoryPopup(badge, _defaultUsedBy, t('theme.default'), 'theme', popup._ssRefreshAfterForget);
         });
       }
-      defaultChip.addEventListener('mouseenter', async () => {
-        if (currentTheme === '') return;
-        defaultPreviewing = true;
-        this._previewTheme('');
-      });
-      defaultChip.addEventListener('mouseleave', async () => {
-        if (!defaultPreviewing) return;
-        defaultPreviewing = false;
-        this._previewTheme(currentTheme);
-      });
+      this._bindHoverPreview(defaultChip,
+        () => { if (currentTheme === '') return; defaultPreviewing = true; this._previewTheme(''); },
+        () => { if (!defaultPreviewing) return; defaultPreviewing = false; this._previewTheme(currentTheme); }
+      );
       defaultChip.addEventListener('click', async () => {
         defaultPreviewing = false;
         if (currentTheme === '') return;
@@ -3220,16 +3568,10 @@ class SwiftSwitchPlugin extends Plugin {
           });
         }
         themeChipEls.push({ el: chip, name: themeName });
-        chip.addEventListener('mouseenter', async () => {
-          if (currentTheme === themeName) return;
-          themePreviewing = true;
-          this._previewTheme(themeName);
-        });
-        chip.addEventListener('mouseleave', async () => {
-          if (!themePreviewing) return;
-          themePreviewing = false;
-          this._previewTheme(currentTheme);
-        });
+        this._bindHoverPreview(chip,
+          () => { if (currentTheme === themeName) return; themePreviewing = true; this._previewTheme(themeName); },
+          () => { if (!themePreviewing) return; themePreviewing = false; this._previewTheme(currentTheme); }
+        );
         chip.addEventListener('click', async () => {
           themePreviewing = false;
           if (currentTheme === themeName) return;
@@ -3436,6 +3778,130 @@ class SwiftSwitchPlugin extends Plugin {
           console.error('SwiftSwitch: failed to open themes', e);
         }
       });
+
+      // ── 组合 chips ──────────────────────────────────────────────
+      const presetArea = themeArea.createDiv();
+      presetArea.style.cssText = 'margin-top:10px;padding-top:8px;border-top:1px dashed var(--background-modifier-border);';
+
+      const presetHeader = presetArea.createDiv();
+      presetHeader.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+      const presetLabel = presetHeader.createEl('div', { text: t('preset.section') });
+      presetLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);';
+      const presetCount = Object.keys(this.settings.stylePresets || {});
+      const presetCountBadge = presetHeader.createEl('span', { text: String(presetCount.length) });
+      presetCountBadge.style.cssText = 'font-size:11px;color:var(--text-muted);background:var(--background-modifier-border);border-radius:8px;padding:0 6px;';
+      const presetSpacer = presetHeader.createEl('span');
+      presetSpacer.style.cssText = 'flex:1;';
+      const saveBtn = presetHeader.createEl('button', { text: '+ ' + t('preset.saveCurrent') });
+      saveBtn.style.cssText = 'border:1px dashed var(--background-modifier-border);background:var(--background-primary);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px;color:var(--text-muted);';
+      saveBtn.addEventListener('mouseenter', () => { saveBtn.style.borderColor = 'var(--interactive-accent)'; saveBtn.style.color = 'var(--interactive-accent)'; });
+      saveBtn.addEventListener('mouseleave', () => { saveBtn.style.borderColor = 'var(--background-modifier-border)'; saveBtn.style.color = 'var(--text-muted)'; });
+      saveBtn.addEventListener('click', async () => {
+        const name = await this._promptGroupName('', t('preset.namePrompt'));
+        if (!name) return;
+        const style = await this._captureCurrentStyle();
+        if (!this.settings.stylePresets) this.settings.stylePresets = {};
+        this.settings.stylePresets[name] = style;
+        await this.saveSettings();
+        new Notice(t('preset.saved') + ': ' + name);
+        await renderThemes();
+      });
+
+      const presetChips = presetArea.createDiv();
+      presetChips.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;min-height:24px;';
+
+      if (presetCount.length === 0) {
+        const hint = presetChips.createEl('span', { text: t('preset.empty') });
+        hint.style.cssText = 'font-size:12px;color:var(--text-faint);';
+      }
+
+      const _presetGetBgLabel = (key) => {
+        if (!key) return '';
+        if (key.startsWith('__customcolor_')) return (this.settings.customBgColors || [])[parseInt(key.slice(14), 10)] || key;
+        if (key.startsWith('__img_')) { const img = (this.settings.bgImages || [])[parseInt(key.slice(6), 10)]; return img ? (img.name || 'img') : key; }
+        return key;
+      };
+
+      for (const [presetName, preset] of Object.entries(this.settings.stylePresets || {})) {
+        const chip = presetChips.createEl('span');
+        const chipLabel = chip.createEl('span', { text: presetName });
+        chipLabel.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;';
+        const parts = [];
+        if (preset.theme) parts.push(preset.theme);
+        if (preset.eyeCareColor) { const bg = _presetGetBgLabel(preset.eyeCareColor); if (bg) parts.push(bg); }
+        if (preset.activeFont) parts.push(preset.activeFont);
+        chip.title = parts.join(' · ');
+        chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;border:1px solid var(--background-modifier-border);background:rgba(var(--mono-rgb-0),0.5);color:var(--text-muted);user-select:none;transition:all 0.15s ease;';
+
+        this._bindHoverPreview(chip,
+          async () => {
+            chip.style.borderColor = 'var(--interactive-accent)';
+            chip.style.background = 'var(--interactive-accent)';
+            chip.style.color = '#fff';
+            const snap = await this._captureCurrentStyle();
+            await this._applyPreset(preset);
+            chip._snap = snap;
+          },
+          async () => {
+            if (chip._snap) { await this._applyPreset(chip._snap); chip._snap = null; }
+            chip.style.borderColor = 'var(--background-modifier-border)';
+            chip.style.background = 'rgba(var(--mono-rgb-0),0.5)';
+            chip.style.color = 'var(--text-muted)';
+          }
+        );
+
+        chip.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          chip._snap = null;
+          await this._applyPreset(preset);
+          new Notice(t('preset.applied') + ': ' + presetName);
+          await renderThemes();
+          await renderEyeCare();
+          renderNav();
+        });
+
+        chip.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const menu = document.createElement('div');
+          menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--background-modifier-border);border-radius:6px;padding:4px 0;z-index:10001;box-shadow:0 4px 16px rgba(0,0,0,0.25);min-width:120px;`;
+          const mkItem = (label, action) => {
+            const item = document.createElement('div');
+            item.textContent = label;
+            item.style.cssText = 'padding:6px 16px;cursor:pointer;font-size:13px;color:var(--text-normal);';
+            item.addEventListener('mouseenter', () => { item.style.background = 'var(--background-modifier-hover)'; });
+            item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+            item.addEventListener('click', async (ev) => { ev.stopPropagation(); menu.remove(); await action(); });
+            menu.appendChild(item);
+          };
+          mkItem(t('preset.overwrite'), async () => {
+            if (!confirm(t('preset.overwriteConfirm').replace('{0}', presetName))) return;
+            this.settings.stylePresets[presetName] = await this._captureCurrentStyle();
+            await this.saveSettings();
+            new Notice(t('preset.saved') + ': ' + presetName);
+            await renderThemes();
+          });
+          mkItem(t('preset.rename'), async () => {
+            const newName = await this._promptGroupName(presetName, t('preset.rename'));
+            if (!newName || newName === presetName) return;
+            if (this.settings.stylePresets[newName]) { new Notice('!'); return; }
+            this.settings.stylePresets[newName] = this.settings.stylePresets[presetName];
+            delete this.settings.stylePresets[presetName];
+            await this.saveSettings();
+            await renderThemes();
+          });
+          mkItem(t('preset.delete'), async () => {
+            if (!confirm(t('preset.deleteConfirm').replace('{0}', presetName))) return;
+            delete this.settings.stylePresets[presetName];
+            await this.saveSettings();
+            new Notice(t('preset.deleted'));
+            await renderThemes();
+          });
+          document.body.appendChild(menu);
+          const closeMenu = (ev) => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', closeMenu); } };
+          setTimeout(() => document.addEventListener('click', closeMenu), 0);
+        });
+      }
     };
 
     renderThemes();
@@ -3975,19 +4441,21 @@ class SwiftSwitchPlugin extends Plugin {
         let _colorPreviewing = false;
         let _colorPrevEyeCare = '';
         if (!isMobile) {
-        chip.addEventListener('mouseenter', async () => {
-          if (this.settings.eyeCareColor === `__customcolor_${cIdx}`) return;
-          _colorPreviewing = true;
-          _colorPrevEyeCare = this.settings.eyeCareColor;
-          this.settings.eyeCareColor = `__customcolor_${cIdx}`;
-          this.applyEyeCareColor();
-        });
-        chip.addEventListener('mouseleave', async () => {
-          if (!_colorPreviewing) return;
-          _colorPreviewing = false;
-          this.settings.eyeCareColor = _colorPrevEyeCare;
-          this.applyEyeCareColor();
-        });
+        this._bindHoverPreview(chip,
+          () => {
+            if (this.settings.eyeCareColor === `__customcolor_${cIdx}`) return;
+            _colorPreviewing = true;
+            _colorPrevEyeCare = this.settings.eyeCareColor;
+            this.settings.eyeCareColor = `__customcolor_${cIdx}`;
+            this.applyEyeCareColor();
+          },
+          () => {
+            if (!_colorPreviewing) return;
+            _colorPreviewing = false;
+            this.settings.eyeCareColor = _colorPrevEyeCare;
+            this.applyEyeCareColor();
+          }
+        );
         }
         chip.addEventListener('click', async () => {
           if (_colorPreviewing) {
@@ -4565,25 +5033,27 @@ class SwiftSwitchPlugin extends Plugin {
       defaultStar.style.cssText = 'display:none;';
 
       let defaultPreviewing = false;
-      defaultChip.addEventListener('mouseenter', () => {
-        if (isDefaultActive) return;
-        defaultPreviewing = true;
-        defaultChip._prevFont = this.settings.activeFont;
-        this.settings.activeFont = '';
-        this.applyFontSettings();
-        defaultChip.style.borderColor = 'var(--interactive-accent)';
-        defaultChip.style.background = 'var(--interactive-accent)';
-        defaultChip.style.color = '#fff';
-      });
-      defaultChip.addEventListener('mouseleave', () => {
-        if (!defaultPreviewing) return;
-        defaultPreviewing = false;
-        this.settings.activeFont = defaultChip._prevFont;
-        this.applyFontSettings();
-        defaultChip.style.borderColor = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
-        defaultChip.style.background = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-primary)';
-        defaultChip.style.color = isDefaultActive ? '#fff' : 'var(--text-normal)';
-      });
+      this._bindHoverPreview(defaultChip,
+        () => {
+          if (isDefaultActive) return;
+          defaultPreviewing = true;
+          defaultChip._prevFont = this.settings.activeFont;
+          this.settings.activeFont = '';
+          this.applyFontSettings();
+          defaultChip.style.borderColor = 'var(--interactive-accent)';
+          defaultChip.style.background = 'var(--interactive-accent)';
+          defaultChip.style.color = '#fff';
+        },
+        () => {
+          if (!defaultPreviewing) return;
+          defaultPreviewing = false;
+          this.settings.activeFont = defaultChip._prevFont;
+          this.applyFontSettings();
+          defaultChip.style.borderColor = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+          defaultChip.style.background = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-primary)';
+          defaultChip.style.color = isDefaultActive ? '#fff' : 'var(--text-normal)';
+        }
+      );
       defaultChip.addEventListener('click', async () => {
         if (defaultPreviewing) {
           defaultPreviewing = false;
@@ -4635,26 +5105,28 @@ class SwiftSwitchPlugin extends Plugin {
         `;
 
         let fontPreviewing = false;
-        chip.addEventListener('mouseenter', () => {
-          if (isActive) return;
-          fontPreviewing = true;
-          chip._prevFont = this.settings.activeFont;
-          this.settings.activeFont = fontName;
-          this.applyFontSettings();
-          chip.style.borderColor = 'var(--interactive-accent)';
-          chip.style.background = 'var(--interactive-accent)';
-          chip.style.color = '#fff';
-          star.style.borderColor = 'var(--interactive-accent)';
-          star.style.background = 'var(--interactive-accent)';
-        });
-        chip.addEventListener('mouseleave', () => {
-          if (!fontPreviewing) return;
-          fontPreviewing = false;
-          this.settings.activeFont = chip._prevFont;
-          this.applyFontSettings();
-          applyFontChipStyle(chip, star, isActive);
-          star.style.color = isFav ? '#f5a623' : 'var(--text-muted)';
-        });
+        this._bindHoverPreview(chip,
+          () => {
+            if (isActive) return;
+            fontPreviewing = true;
+            chip._prevFont = this.settings.activeFont;
+            this.settings.activeFont = fontName;
+            this.applyFontSettings();
+            chip.style.borderColor = 'var(--interactive-accent)';
+            chip.style.background = 'var(--interactive-accent)';
+            chip.style.color = '#fff';
+            star.style.borderColor = 'var(--interactive-accent)';
+            star.style.background = 'var(--interactive-accent)';
+          },
+          () => {
+            if (!fontPreviewing) return;
+            fontPreviewing = false;
+            this.settings.activeFont = chip._prevFont;
+            this.applyFontSettings();
+            applyFontChipStyle(chip, star, isActive);
+            star.style.color = isFav ? '#f5a623' : 'var(--text-muted)';
+          }
+        );
 
         chip.addEventListener('click', async () => {
           if (fontPreviewing) {
@@ -5052,32 +5524,36 @@ class SwiftSwitchPlugin extends Plugin {
     const _specialNavIds = ['theme', '__ungrouped__', 'bg', 'font', 'memory'];
     const renderNav = () => {
       nav.empty();
-      const addItem = (id, name, count, active) => {
-        const btn = nav.createEl('button');
-        btn.style.cssText = `display:flex;width:100%;align-items:center;gap:6px;background:none;border:0;border-radius:6px;padding:7px 8px;text-align:left;cursor:pointer;font-size:12px;color:var(--text-normal);margin-bottom:3px;${_ssCur === id && !searchInput.value ? 'background:rgba(var(--interactive-accent-rgb),0.15);font-weight:600;' : ''}`;
-        if (isMobile) btn.style.cssText += 'border:1px solid var(--background-modifier-border);min-width:0;';
-        const dot = btn.createEl('span');
-        dot.style.cssText = `width:6px;height:6px;border-radius:50%;flex:none;${active ? 'background:var(--interactive-accent);' : 'background:transparent;border:1px solid var(--background-modifier-border);'}`;
-        const lbl = btn.createEl('span');
-        lbl.textContent = name;
-        lbl.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-        if (count !== '' && !isMobile) {
-          const n = btn.createEl('span');
-          n.textContent = count;
-          n.style.cssText = 'font-size:11px;color:var(--text-muted);';
+
+      if (!this.settings.navBoxes || !Array.isArray(this.settings.navBoxes) || this.settings.navBoxes.length === 0) {
+        this.settings.navBoxes = [
+          { id: 'appearance', title: '', items: ['theme', 'bg', 'font'] },
+          { id: 'snippets', title: '', auto: true },
+          { id: 'system', title: '', items: ['memory'] }
+        ];
+      }
+
+      const _requiredInBox = { appearance: ['theme', 'bg', 'font'], system: ['memory'] };
+      for (const [bid, reqs] of Object.entries(_requiredInBox)) {
+        const box = this.settings.navBoxes.find(b => b.id === bid);
+        if (box && !box.auto) {
+          if (!box.items) box.items = [];
+          for (const r of reqs) { if (!box.items.includes(r)) box.items.push(r); }
         }
-        btn.addEventListener('click', (e) => { e.stopPropagation(); searchInput.value = ''; _ssCur = id; updateAreas(); renderNav(); });
-        if (!isMobile) {
-          btn.addEventListener('mouseenter', () => { if (_ssCur === id && !searchInput.value) return; searchInput.value = ''; _ssCur = id; updateAreas(); renderNav(); });
-        }
-        return btn;
-      };
+      }
 
       const orderedGroups = this.settings.groupOrder.filter(g => this.settings.groups[g] && g !== '__bg__');
       const _allNavItems = ['theme', ...orderedGroups, '__ungrouped__', 'bg', 'font', 'memory'];
-      if (!Array.isArray(this.settings.navOrder)) this.settings.navOrder = [];
-      this.settings.navOrder = this.settings.navOrder.filter(id => _allNavItems.includes(id));
-      _allNavItems.forEach(id => { if (!this.settings.navOrder.includes(id)) this.settings.navOrder.push(id); });
+
+      const claimedItems = new Set();
+      for (const box of this.settings.navBoxes) {
+        if (!box.auto && box.items) box.items.forEach(id => { if (_allNavItems.includes(id)) claimedItems.add(id); });
+      }
+
+      const getBoxItems = (box) => {
+        if (box.auto) return [...orderedGroups, '__ungrouped__'].filter(id => !claimedItems.has(id) && _allNavItems.includes(id));
+        return (box.items || []).filter(id => _allNavItems.includes(id));
+      };
 
       const _allSnippetFiles = this._getAllSnippetFilesSync();
       const _groupedSet = new Set();
@@ -5099,62 +5575,256 @@ class SwiftSwitchPlugin extends Plugin {
         return { name: id, count: onCount > 0 ? onCount + '/' + members.length : String(members.length), active: onCount > 0 };
       };
 
+      const _curBoxId = (() => {
+        for (const box of this.settings.navBoxes) { if (getBoxItems(box).includes(_ssCur)) return box.id; }
+        return null;
+      })();
+
       let _dragSrcItem = null;
-      for (const itemId of this.settings.navOrder) {
-        const info = getItemInfo(itemId);
-        const btn = addItem(itemId, info.name, info.count, info.active);
-        if (btn && !isMobile) {
-          btn.draggable = true;
-          btn.addEventListener('dragstart', (e) => {
-            _dragSrcItem = itemId;
-            e.dataTransfer.effectAllowed = 'move';
-            try { e.dataTransfer.setData('text/plain', itemId); } catch (_) {}
-            btn.style.opacity = '0.4';
+      let _dragSrcBoxId = null;
+      const _defaultBoxIds = ['appearance', 'snippets', 'system'];
+
+      for (const box of this.settings.navBoxes) {
+        const boxItems = getBoxItems(box);
+        if (boxItems.length === 0 && box.auto) continue;
+
+        const isSystem = box.id === 'system';
+        const isHit = _curBoxId === box.id;
+        const boxTitle = box.title || t('navBox.' + box.id) || t('navBox.untitled');
+
+        const boxEl = nav.createDiv();
+        const hitColor = isSystem ? 'var(--text-error)' : 'var(--interactive-accent)';
+        boxEl.style.cssText = `position:relative;border:1.5px solid ${isHit ? hitColor : 'var(--background-modifier-border)'};border-radius:11px;background:var(--ss-popup-bg);padding:10px 6px 6px;margin-bottom:12px;transition:border-color 0.15s;${box.id === 'system' ? 'margin-top:auto;' : ''}`;
+
+        const hd = boxEl.createDiv();
+        hd.style.cssText = 'position:absolute;top:-9px;left:12px;display:flex;align-items:center;gap:4px;background:var(--ss-popup-bg);padding:0 6px;font-size:11.5px;color:var(--text-muted);user-select:none;z-index:1;';
+
+        const hdLabel = hd.createEl('span');
+        hdLabel.textContent = boxTitle;
+        hdLabel.style.cursor = 'pointer';
+
+        if (box.id === 'snippets' && !isMobile) {
+          const addBtn = hd.createEl('span');
+          addBtn.textContent = '+';
+          addBtn.style.cssText = 'width:18px;height:18px;border-radius:5px;display:grid;place-items:center;cursor:pointer;color:var(--text-muted);font-size:14px;line-height:1;';
+          addBtn.addEventListener('mouseenter', () => { addBtn.style.background = 'var(--background-modifier-hover)'; addBtn.style.color = 'var(--text-normal)'; });
+          addBtn.addEventListener('mouseleave', () => { addBtn.style.background = ''; addBtn.style.color = 'var(--text-muted)'; });
+          addBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const groupName = await this._promptGroupName('');
+            if (groupName && !this.settings.groups[groupName]) {
+              this.settings.groups[groupName] = [];
+              this.settings.groupOrder.push(groupName);
+              await this.saveSettings();
+              _ssCur = groupName; updateAreas(); renderNav();
+            }
           });
-          btn.addEventListener('dragend', () => { btn.style.opacity = ''; _dragSrcItem = null; });
-          btn.addEventListener('dragover', (e) => {
-            if (!_dragSrcItem || _dragSrcItem === itemId) return;
+        }
+
+        if (!_defaultBoxIds.includes(box.id)) {
+          hdLabel.addEventListener('contextmenu', async (e) => {
             e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            btn.style.background = 'rgba(var(--interactive-accent-rgb),0.2)';
-          });
-          btn.addEventListener('dragleave', () => {
-            if (_ssCur === itemId && !searchInput.value) return;
-            btn.style.background = '';
-          });
-          btn.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            btn.style.background = '';
-            if (!_dragSrcItem || _dragSrcItem === itemId) return;
-            const from = this.settings.navOrder.indexOf(_dragSrcItem);
-            const to = this.settings.navOrder.indexOf(itemId);
-            if (from === -1 || to === -1) return;
-            this.settings.navOrder.splice(from, 1);
-            this.settings.navOrder.splice(to, 0, _dragSrcItem);
-            const newOrder = this.settings.navOrder.filter(id => !_specialNavIds.includes(id) && this.settings.groups[id]);
-            for (const g of this.settings.groupOrder) { if (!newOrder.includes(g)) newOrder.push(g); }
-            this.settings.groupOrder = newOrder;
+            e.stopPropagation();
+            if (!confirm(t('navBox.deleteConfirm').replace('{0}', boxTitle))) return;
+            this.settings.navBoxes = this.settings.navBoxes.filter(b => b.id !== box.id);
             await this.saveSettings();
             renderNav();
+          });
+        }
+
+        hdLabel.addEventListener('dblclick', async (e) => {
+          e.stopPropagation();
+          const newTitle = await this._promptGroupName(boxTitle, t('navBox.titlePrompt'));
+          if (newTitle && newTitle !== boxTitle) {
+            box.title = newTitle;
+            await this.saveSettings();
+            renderNav();
+          }
+        });
+
+        const listEl = boxEl.createDiv();
+        listEl.style.cssText = 'display:flex;flex-direction:column;gap:1px;';
+
+        if (boxItems.length === 0 && !box.auto) {
+          const hint = listEl.createEl('span');
+          hint.textContent = _currentLang === 'zh' ? '拖入项目' : 'Drag items here';
+          hint.style.cssText = 'font-size:11px;color:var(--text-faint);padding:4px 9px;font-style:italic;';
+        }
+
+        for (const itemId of boxItems) {
+          const info = getItemInfo(itemId);
+          const isSel = _ssCur === itemId && !searchInput.value;
+          const selColor = isSystem ? 'var(--text-error)' : 'var(--interactive-accent)';
+
+          const btn = listEl.createEl('button');
+          btn.style.cssText = `display:flex;width:100%;align-items:center;gap:6px;background:none;border:0;border-radius:7px;padding:6px 9px;text-align:left;cursor:pointer;font-size:12px;color:${isSel ? selColor : 'var(--text-normal)'};${isSel ? 'background:' + (isSystem ? 'rgba(var(--mono-rgb-0),0.15)' : 'rgba(var(--interactive-accent-rgb),0.12)') + ';font-weight:600;' : ''}`;
+          if (isMobile) btn.style.cssText += 'border:1px solid var(--background-modifier-border);min-width:0;';
+
+          const dot = btn.createEl('span');
+          dot.style.cssText = `width:7px;height:7px;border-radius:50%;flex:none;border:1.5px solid ${info.active ? 'var(--interactive-accent)' : 'var(--text-faint)'};${info.active ? 'background:var(--interactive-accent);' : ''}`;
+
+          const lbl = btn.createEl('span');
+          lbl.textContent = info.name;
+          lbl.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+
+          if (info.count !== '' && !isMobile) {
+            const n = btn.createEl('span');
+            n.textContent = info.count;
+            n.style.cssText = `font-size:11.5px;color:${isSel ? selColor : 'var(--text-muted)'};font-variant-numeric:tabular-nums;`;
+          }
+
+          btn.addEventListener('click', (e) => { e.stopPropagation(); searchInput.value = ''; _ssCur = itemId; updateAreas(); renderNav(); });
+          btn.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            document.querySelectorAll('.ss-nav-ctx-menu').forEach(m => m.remove());
+            const menu = document.createElement('div');
+            menu.className = 'ss-nav-ctx-menu';
+            const _ctxDark = !!(document.body.classList.contains('theme-dark') || window.matchMedia('(prefers-color-scheme: dark)').matches);
+            const _ctxBg = _ctxDark ? '#262624' : '#fcfbf8';
+            const _ctxBorder = _ctxDark ? '#3b3b37' : '#dedbd3';
+            const _ctxHover = _ctxDark ? '#383834' : '#ebe8e1';
+            const _ctxText = _ctxDark ? '#e8e6e0' : '#2b2a27';
+            menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:${_ctxBg};border:1px solid ${_ctxBorder};border-radius:6px;padding:4px 0;z-index:10001;box-shadow:0 4px 16px rgba(0,0,0,0.25);min-width:120px;`;
+            const mkItem = (label, action) => {
+              const item = document.createElement('div');
+              item.textContent = label;
+              item.style.cssText = `padding:6px 16px;cursor:pointer;font-size:12px;color:${_ctxText};`;
+              item.addEventListener('mouseenter', () => { item.style.background = _ctxHover; });
+              item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+              item.addEventListener('click', async () => { menu.remove(); await action(); });
+              menu.appendChild(item);
+            };
+            const isGroup = !_specialNavIds.includes(itemId) && itemId !== '__ungrouped__';
+            if (isGroup) {
+              mkItem(t('context.renameGroup'), async () => {
+                const newName = await this._promptGroupName(itemId);
+                if (newName && newName !== itemId) {
+                  const members = this.settings.groups[itemId];
+                  delete this.settings.groups[itemId];
+                  this.settings.groups[newName] = members;
+                  const idx = this.settings.groupOrder.indexOf(itemId);
+                  if (idx !== -1) this.settings.groupOrder[idx] = newName;
+                  if (Array.isArray(this.settings.navBoxes)) {
+                    for (const b of this.settings.navBoxes) { if (b.items) { const bi = b.items.indexOf(itemId); if (bi !== -1) b.items[bi] = newName; } }
+                  }
+                  await this.saveSettings(); renderNav();
+                }
+              });
+              const isEx = this.settings.exclusiveGroups && this.settings.exclusiveGroups.includes(itemId);
+              mkItem((isEx ? '✓ ' : '') + t('group.exclusive'), async () => {
+                if (!this.settings.exclusiveGroups) this.settings.exclusiveGroups = [];
+                if (isEx) this.settings.exclusiveGroups = this.settings.exclusiveGroups.filter(g => g !== itemId);
+                else this.settings.exclusiveGroups.push(itemId);
+                await this.saveSettings(); renderNav();
+              });
+              mkItem(t('context.deleteGroup'), async () => {
+                delete this.settings.groups[itemId];
+                this.settings.groupOrder = this.settings.groupOrder.filter(n => n !== itemId);
+                if (Array.isArray(this.settings.navBoxes)) {
+                  for (const b of this.settings.navBoxes) { if (b.items) b.items = b.items.filter(n => n !== itemId); }
+                }
+                await this.saveSettings(); renderNav();
+              });
+              const sep = document.createElement('div');
+              sep.style.cssText = `height:1px;background:${_ctxBorder};margin:4px 0;`;
+              menu.appendChild(sep);
+            }
+            const moveLabel = _currentLang === 'zh' ? '移至' : 'Move to';
+            for (const targetBox of this.settings.navBoxes) {
+              if (targetBox.id === box.id) continue;
+              if (targetBox.auto && !isGroup) continue;
+              const targetTitle = targetBox.title || t('navBox.' + targetBox.id) || t('navBox.untitled');
+              mkItem(moveLabel + ' → ' + targetTitle, async () => {
+                if (!targetBox.auto) {
+                  if (!targetBox.items) targetBox.items = [];
+                  if (!targetBox.items.includes(itemId)) targetBox.items.push(itemId);
+                }
+                if (!box.auto && box.id !== targetBox.id) {
+                  box.items = (box.items || []).filter(id => id !== itemId);
+                }
+                await this.saveSettings(); renderNav();
+              });
+            }
+            document.body.appendChild(menu);
+            const closeMenu = (ev) => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', closeMenu); } };
+            setTimeout(() => document.addEventListener('click', closeMenu), 0);
+          });
+          if (!isMobile) {
+            this._bindHoverPreview(btn,
+              () => { if (_ssCur === itemId && !searchInput.value) return; searchInput.value = ''; _ssCur = itemId; updateAreas(); renderNav(); }
+            );
+            btn.draggable = true;
+            btn.addEventListener('dragstart', (e) => {
+              _dragSrcItem = itemId; _dragSrcBoxId = box.id;
+              e.dataTransfer.effectAllowed = 'move';
+              try { e.dataTransfer.setData('text/plain', itemId); } catch (_) {}
+              btn.style.opacity = '0.4';
+            });
+            btn.addEventListener('dragend', () => { btn.style.opacity = ''; _dragSrcItem = null; _dragSrcBoxId = null; });
+            btn.addEventListener('dragover', (e) => {
+              if (!_dragSrcItem) return;
+              e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+              btn.style.background = 'rgba(var(--interactive-accent-rgb),0.2)';
+            });
+            btn.addEventListener('dragleave', () => { if (_ssCur === itemId && !searchInput.value) return; btn.style.background = ''; });
+            btn.addEventListener('drop', async (e) => {
+              e.preventDefault(); btn.style.background = '';
+              if (!_dragSrcItem || _dragSrcItem === itemId) return;
+              const targetBox = this.settings.navBoxes.find(b => b.id === box.id);
+              const srcBox = this.settings.navBoxes.find(b => b.id === _dragSrcBoxId);
+              if (targetBox && !targetBox.auto) {
+                if (!targetBox.items) targetBox.items = [];
+                if (!targetBox.items.includes(_dragSrcItem)) {
+                  const ti = targetBox.items.indexOf(itemId);
+                  if (ti >= 0) targetBox.items.splice(ti, 0, _dragSrcItem);
+                  else targetBox.items.push(_dragSrcItem);
+                }
+              }
+              if (srcBox && !srcBox.auto && srcBox.id !== box.id) {
+                srcBox.items = (srcBox.items || []).filter(id => id !== _dragSrcItem);
+              }
+              if (box.auto && _dragSrcBoxId === box.id) {
+                const items = getBoxItems(box);
+                const from = items.indexOf(_dragSrcItem), to = items.indexOf(itemId);
+                if (from !== -1 && to !== -1) {
+                  const newOrder = items.slice();
+                  newOrder.splice(from, 1); newOrder.splice(to, 0, _dragSrcItem);
+                  this.settings.groupOrder = newOrder.filter(id => !_specialNavIds.includes(id) && this.settings.groups[id]);
+                  for (const g of items) { if (!this.settings.groupOrder.includes(g) && this.settings.groups[g]) this.settings.groupOrder.push(g); }
+                }
+              }
+              await this.saveSettings(); renderNav();
+            });
+          }
+        }
+
+        if (!isMobile && !box.auto) {
+          boxEl.addEventListener('dragover', (e) => { if (!_dragSrcItem) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+          boxEl.addEventListener('drop', async (e) => {
+            if (!_dragSrcItem || e.target.closest('button')) return;
+            e.preventDefault();
+            const targetBox = this.settings.navBoxes.find(b => b.id === box.id);
+            const srcBox = this.settings.navBoxes.find(b => b.id === _dragSrcBoxId);
+            if (targetBox && !targetBox.items) targetBox.items = [];
+            if (targetBox && !targetBox.items.includes(_dragSrcItem)) targetBox.items.push(_dragSrcItem);
+            if (srcBox && !srcBox.auto && srcBox.id !== box.id) srcBox.items = (srcBox.items || []).filter(id => id !== _dragSrcItem);
+            await this.saveSettings(); renderNav();
           });
         }
       }
 
       if (!isMobile) {
-        const addGroupBtn = nav.createEl('button');
-        addGroupBtn.textContent = '+ ' + t('group.add');
-        addGroupBtn.style.cssText = 'display:flex;width:100%;align-items:center;gap:6px;background:none;border:1px dashed var(--background-modifier-border);border-radius:6px;padding:6px 8px;text-align:left;cursor:pointer;font-size:12px;color:var(--text-muted);margin-top:4px;';
-        addGroupBtn.addEventListener('mouseenter', () => { addGroupBtn.style.borderColor = 'var(--interactive-accent)'; addGroupBtn.style.color = 'var(--interactive-accent)'; });
-        addGroupBtn.addEventListener('mouseleave', () => { addGroupBtn.style.borderColor = 'var(--background-modifier-border)'; addGroupBtn.style.color = 'var(--text-muted)'; });
-        addGroupBtn.addEventListener('click', async (e) => {
+        const addBoxBtn = nav.createEl('button');
+        addBoxBtn.textContent = '+ ' + t('navBox.addBox');
+        addBoxBtn.style.cssText = 'display:flex;width:100%;align-items:center;gap:6px;background:none;border:1px dashed var(--background-modifier-border);border-radius:8px;padding:6px 8px;text-align:left;cursor:pointer;font-size:12px;color:var(--text-muted);margin-top:4px;';
+        addBoxBtn.addEventListener('mouseenter', () => { addBoxBtn.style.borderColor = 'var(--interactive-accent)'; addBoxBtn.style.color = 'var(--interactive-accent)'; });
+        addBoxBtn.addEventListener('mouseleave', () => { addBoxBtn.style.borderColor = 'var(--background-modifier-border)'; addBoxBtn.style.color = 'var(--text-muted)'; });
+        addBoxBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          const groupName = await this._promptGroupName('');
-          if (groupName && !this.settings.groups[groupName]) {
-            this.settings.groups[groupName] = [];
-            this.settings.groupOrder.push(groupName);
-            await this.saveSettings();
-            _ssCur = groupName; updateAreas(); renderNav();
-          }
+          const title = await this._promptGroupName('', t('navBox.titlePrompt'));
+          if (!title) return;
+          this.settings.navBoxes.push({ id: 'custom_' + Date.now(), title: title, items: [] });
+          await this.saveSettings(); renderNav();
         });
       }
     };
@@ -5237,6 +5907,103 @@ class SwiftSwitchPlugin extends Plugin {
         await this.saveSettings();
       });
 
+      const tabWheelRow = settingsPopup.createDiv();
+      tabWheelRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;';
+      const tabWheelLabel = tabWheelRow.createEl('span', { text: t('settings.tabHeaderWheelTheme') });
+      tabWheelLabel.style.cssText = 'font-size:12px;color:var(--text-normal);';
+      const tabWheelToggle = tabWheelRow.createEl('span');
+      const isTabWheelOn = !!this.settings.tabHeaderWheelTheme;
+      tabWheelToggle.style.cssText = `display:inline-block;width:36px;height:20px;border-radius:10px;position:relative;cursor:pointer;transition:background 0.15s ease;background:${isTabWheelOn ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};flex-shrink:0;`;
+      const tabWheelKnob = tabWheelToggle.createEl('span');
+      tabWheelKnob.style.cssText = `position:absolute;top:2px;left:${isTabWheelOn ? '18px' : '2px'};width:16px;height:16px;border-radius:50%;background:#fff;transition:left 0.15s ease;`;
+      tabWheelToggle.addEventListener('click', async () => {
+        this.settings.tabHeaderWheelTheme = !this.settings.tabHeaderWheelTheme;
+        const on = this.settings.tabHeaderWheelTheme;
+        tabWheelToggle.style.background = on ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+        tabWheelKnob.style.left = on ? '18px' : '2px';
+        await this.saveSettings();
+      });
+
+      // 悬浮按钮滚轮切换分组复选框
+      const wheelGroupsRow = settingsPopup.createDiv();
+      wheelGroupsRow.style.cssText = 'margin-top:10px;';
+      const wheelGroupsLabel = wheelGroupsRow.createEl('div', { text: t('settings.wheelGroups') });
+      wheelGroupsLabel.style.cssText = 'font-size:12px;color:var(--text-normal);margin-bottom:4px;';
+      const wheelGroupsHint = wheelGroupsRow.createEl('div', { text: t('settings.wheelGroupsHint') });
+      wheelGroupsHint.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:6px;';
+      const wheelGroupsList = wheelGroupsRow.createDiv();
+      wheelGroupsList.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+      const _wheelGroupNames = (this.settings.groupOrder || []).filter(g => this.settings.groups[g]);
+      if (!_wheelGroupNames.includes('__bg__') && this.settings.groups['__bg__']) _wheelGroupNames.unshift('__bg__');
+      const _wheelSelected = Array.isArray(this.settings.wheelGroups) ? this.settings.wheelGroups : ['__bg__'];
+      _wheelGroupNames.forEach(gName => {
+        const chip = wheelGroupsList.createEl('span');
+        const isSel = _wheelSelected.includes(gName);
+        chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer;border:1px solid ${isSel ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};background:${isSel ? 'var(--interactive-accent)' : 'var(--background-primary)'};color:${isSel ? '#fff' : 'var(--text-normal)'};`;
+        chip.textContent = gName === '__bg__' ? (t('eyeCare.default') === 'Default' ? 'Background' : '背景色') : gName;
+        chip.addEventListener('click', async () => {
+          const idx = this.settings.wheelGroups.indexOf(gName);
+          if (idx >= 0) this.settings.wheelGroups.splice(idx, 1);
+          else this.settings.wheelGroups.push(gName);
+          const sel = this.settings.wheelGroups.includes(gName);
+          chip.style.border = `1px solid ${sel ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'}`;
+          chip.style.background = sel ? 'var(--interactive-accent)' : 'var(--background-primary)';
+          chip.style.color = sel ? '#fff' : 'var(--text-normal)';
+          await this.saveSettings();
+        });
+      });
+
+      const chipHintRow = settingsPopup.createDiv();
+      chipHintRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;';
+      const chipHintLabel = chipHintRow.createEl('span', { text: t('settings.chipHoverHint') });
+      chipHintLabel.style.cssText = 'font-size:12px;color:var(--text-normal);';
+      const chipHintToggle = chipHintRow.createEl('span');
+      const isChipHintOn = this.settings.chipHoverHint !== false;
+      chipHintToggle.style.cssText = `display:inline-block;width:36px;height:20px;border-radius:10px;position:relative;cursor:pointer;transition:background 0.15s ease;background:${isChipHintOn ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};flex-shrink:0;`;
+      const chipHintKnob = chipHintToggle.createEl('span');
+      chipHintKnob.style.cssText = `position:absolute;top:2px;left:${isChipHintOn ? '18px' : '2px'};width:16px;height:16px;border-radius:50%;background:#fff;transition:left 0.15s ease;`;
+      chipHintToggle.addEventListener('click', async () => {
+        this.settings.chipHoverHint = !this.settings.chipHoverHint;
+        const on = this.settings.chipHoverHint;
+        chipHintToggle.style.background = on ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+        chipHintKnob.style.left = on ? '18px' : '2px';
+        await this.saveSettings();
+      });
+
+      const hoverRow = settingsPopup.createDiv();
+      hoverRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;';
+      const hoverLabel = hoverRow.createEl('span', { text: t('settings.hoverPreview') });
+      hoverLabel.style.cssText = 'font-size:12px;color:var(--text-normal);';
+      const hoverToggle = hoverRow.createEl('span');
+      const isHoverOn = !!this.settings.hoverPreview;
+      hoverToggle.style.cssText = `display:inline-block;width:36px;height:20px;border-radius:10px;position:relative;cursor:pointer;transition:background 0.15s ease;background:${isHoverOn ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};flex-shrink:0;`;
+      const hoverKnob = hoverToggle.createEl('span');
+      hoverKnob.style.cssText = `position:absolute;top:2px;left:${isHoverOn ? '18px' : '2px'};width:16px;height:16px;border-radius:50%;background:#fff;transition:left 0.15s ease;`;
+      hoverToggle.addEventListener('click', async () => {
+        this.settings.hoverPreview = !this.settings.hoverPreview;
+        const on = this.settings.hoverPreview;
+        hoverToggle.style.background = on ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+        hoverKnob.style.left = on ? '18px' : '2px';
+        await this.saveSettings();
+      });
+
+      const hoverDelayRow = settingsPopup.createDiv();
+      hoverDelayRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;';
+      const hoverDelayLabel = hoverDelayRow.createEl('span', { text: t('settings.hoverDelay') });
+      hoverDelayLabel.style.cssText = 'font-size:12px;color:var(--text-normal);';
+      const hoverDelayInput = hoverDelayRow.createEl('input');
+      hoverDelayInput.type = 'number';
+      hoverDelayInput.min = '0';
+      hoverDelayInput.max = '2000';
+      hoverDelayInput.value = String(this.settings.hoverDelay || 0);
+      hoverDelayInput.style.cssText = 'width:80px;border:1px solid var(--background-modifier-border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--background-primary);color:var(--text-normal);';
+      hoverDelayInput.addEventListener('change', async () => {
+        const v = Math.max(0, Math.min(2000, parseInt(hoverDelayInput.value) || 0));
+        this.settings.hoverDelay = v;
+        hoverDelayInput.value = String(v);
+        await this.saveSettings();
+      });
+
       const modeRow = settingsPopup.createDiv();
       modeRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;';
       const modeLabel = modeRow.createEl('span', { text: t('settings.defaultBgMode') });
@@ -5260,8 +6027,9 @@ class SwiftSwitchPlugin extends Plugin {
             await this.saveSettings();
             renderModeBtns();
           });
-        });
+      });
       };
+
       renderModeBtns();
 
       document.body.appendChild(settingsPopup);
@@ -5474,6 +6242,11 @@ class SwiftSwitchPlugin extends Plugin {
           const ni = this.settings.navOrder.indexOf(groupName);
           if (ni !== -1) this.settings.navOrder[ni] = newName;
         }
+        if (Array.isArray(this.settings.navBoxes)) {
+          for (const box of this.settings.navBoxes) {
+            if (box.items) { const bi = box.items.indexOf(groupName); if (bi !== -1) box.items[bi] = newName; }
+          }
+        }
         if (this.settings.collapsedGroups[groupName] !== undefined) {
           this.settings.collapsedGroups[newName] = this.settings.collapsedGroups[groupName];
           delete this.settings.collapsedGroups[groupName];
@@ -5503,6 +6276,11 @@ class SwiftSwitchPlugin extends Plugin {
       delete this.settings.groups[groupName];
       this.settings.groupOrder = this.settings.groupOrder.filter(n => n !== groupName);
       if (Array.isArray(this.settings.navOrder)) this.settings.navOrder = this.settings.navOrder.filter(n => n !== groupName);
+      if (Array.isArray(this.settings.navBoxes)) {
+        for (const box of this.settings.navBoxes) {
+          if (box.items) box.items = box.items.filter(n => n !== groupName);
+        }
+      }
       delete this.settings.collapsedGroups[groupName];
       await this.saveSettings();
       rerender();
@@ -5542,37 +6320,38 @@ class SwiftSwitchPlugin extends Plugin {
     let isPreviewing = false;
     let previewDisabledMembers = [];
 
-    chip.addEventListener('mouseenter', () => {
-      if (chipEnabled) return;
-      isPreviewing = true;
-      if (isExclusive) {
-        const members = this.settings.groups[currentGroup] || [];
-        previewDisabledMembers = [];
-        for (const name of members) {
-          if (name !== snippetName) {
-            const cc = this.app.customCss;
-            const wasEnabled = cc && cc.enabledSnippets && cc.enabledSnippets.has(name);
-            if (wasEnabled) {
-              this._setSnippetEnabled(name, false);
-              previewDisabledMembers.push(name);
+    this._bindHoverPreview(chip,
+      () => {
+        if (chipEnabled) return;
+        isPreviewing = true;
+        if (isExclusive) {
+          const members = this.settings.groups[currentGroup] || [];
+          previewDisabledMembers = [];
+          for (const name of members) {
+            if (name !== snippetName) {
+              const cc = this.app.customCss;
+              const wasEnabled = cc && cc.enabledSnippets && cc.enabledSnippets.has(name);
+              if (wasEnabled) {
+                this._setSnippetEnabled(name, false);
+                previewDisabledMembers.push(name);
+              }
             }
           }
         }
+        this._setSnippetEnabled(snippetName, true);
+        applyStyle(true);
+      },
+      () => {
+        if (!isPreviewing) return;
+        isPreviewing = false;
+        this._setSnippetEnabled(snippetName, false);
+        for (const name of previewDisabledMembers) {
+          this._setSnippetEnabled(name, true);
+        }
+        previewDisabledMembers = [];
+        applyStyle(chipEnabled);
       }
-      this._setSnippetEnabled(snippetName, true);
-      applyStyle(true);
-    });
-
-    chip.addEventListener('mouseleave', () => {
-      if (!isPreviewing) return;
-      isPreviewing = false;
-      this._setSnippetEnabled(snippetName, false);
-      for (const name of previewDisabledMembers) {
-        this._setSnippetEnabled(name, true);
-      }
-      previewDisabledMembers = [];
-      applyStyle(chipEnabled);
-    });
+    );
 
     chip.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -6376,25 +7155,27 @@ class SwiftSwitchPlugin extends Plugin {
       defaultStar.style.cssText = 'display:none;';
 
       let defaultPreviewing = false;
-      defaultChip.addEventListener('mouseenter', () => {
-        if (isDefaultActive) return;
-        defaultPreviewing = true;
-        defaultChip._prevFont = this.settings.activeFont;
-        this.settings.activeFont = '';
-        this.applyFontSettings();
-        defaultChip.style.borderColor = 'var(--interactive-accent)';
-        defaultChip.style.background = 'var(--interactive-accent)';
-        defaultChip.style.color = '#fff';
-      });
-      defaultChip.addEventListener('mouseleave', () => {
-        if (!defaultPreviewing) return;
-        defaultPreviewing = false;
-        this.settings.activeFont = defaultChip._prevFont;
-        this.applyFontSettings();
-        defaultChip.style.borderColor = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
-        defaultChip.style.background = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-primary)';
-        defaultChip.style.color = isDefaultActive ? '#fff' : 'var(--text-normal)';
-      });
+      this._bindHoverPreview(defaultChip,
+        () => {
+          if (isDefaultActive) return;
+          defaultPreviewing = true;
+          defaultChip._prevFont = this.settings.activeFont;
+          this.settings.activeFont = '';
+          this.applyFontSettings();
+          defaultChip.style.borderColor = 'var(--interactive-accent)';
+          defaultChip.style.background = 'var(--interactive-accent)';
+          defaultChip.style.color = '#fff';
+        },
+        () => {
+          if (!defaultPreviewing) return;
+          defaultPreviewing = false;
+          this.settings.activeFont = defaultChip._prevFont;
+          this.applyFontSettings();
+          defaultChip.style.borderColor = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+          defaultChip.style.background = isDefaultActive ? 'var(--interactive-accent)' : 'var(--background-primary)';
+          defaultChip.style.color = isDefaultActive ? '#fff' : 'var(--text-normal)';
+        }
+      );
       defaultChip.addEventListener('click', async () => {
         if (defaultPreviewing) {
           defaultPreviewing = false;
@@ -6447,26 +7228,28 @@ class SwiftSwitchPlugin extends Plugin {
         `;
 
         let fontPreviewing = false;
-        chip.addEventListener('mouseenter', () => {
-          if (isActive) return;
-          fontPreviewing = true;
-          chip._prevFont = this.settings.activeFont;
-          this.settings.activeFont = fontName;
-          this.applyFontSettings();
-          chip.style.borderColor = 'var(--interactive-accent)';
-          chip.style.background = 'var(--interactive-accent)';
-          chip.style.color = '#fff';
-          star.style.borderColor = 'var(--interactive-accent)';
-          star.style.background = 'var(--interactive-accent)';
-        });
-        chip.addEventListener('mouseleave', () => {
-          if (!fontPreviewing) return;
-          fontPreviewing = false;
-          this.settings.activeFont = chip._prevFont;
-          this.applyFontSettings();
-          applyFontChipStyle(chip, star, isActive);
-          star.style.color = isFav ? '#f5a623' : 'var(--text-muted)';
-        });
+        this._bindHoverPreview(chip,
+          () => {
+            if (isActive) return;
+            fontPreviewing = true;
+            chip._prevFont = this.settings.activeFont;
+            this.settings.activeFont = fontName;
+            this.applyFontSettings();
+            chip.style.borderColor = 'var(--interactive-accent)';
+            chip.style.background = 'var(--interactive-accent)';
+            chip.style.color = '#fff';
+            star.style.borderColor = 'var(--interactive-accent)';
+            star.style.background = 'var(--interactive-accent)';
+          },
+          () => {
+            if (!fontPreviewing) return;
+            fontPreviewing = false;
+            this.settings.activeFont = chip._prevFont;
+            this.applyFontSettings();
+            applyFontChipStyle(chip, star, isActive);
+            star.style.color = isFav ? '#f5a623' : 'var(--text-muted)';
+          }
+        );
 
         chip.addEventListener('click', async () => {
           if (fontPreviewing) {

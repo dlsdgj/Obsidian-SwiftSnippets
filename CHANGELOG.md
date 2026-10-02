@@ -1,4 +1,12 @@
-## 🆕 v1.2.3 (2026-10-02)
+## 🆕 v1.2.4 (2026-10-02)
+
+- **Theme Wheel Popup Fix** — Fixed popup item height/padding not rendering due to CSS override; used setProperty + !important for inline styles
+- **Group Wheel Popup** — New `_showGroupWheelPopup` method: floating button wheel now pops up a group list (same style as theme list), clickable items, mouse-distance-based close (20px)
+- **Wheel Groups Setting** — Added checkbox list in settings to select which groups the floating button wheel cycles through
+- **Chip Hover Hint Toggle** — Added settings toggle to show/hide chip hover tooltip text
+- **Theme Wheel Popup UX** — List items clickable to switch theme; close on mouse moving 20px away from popup (no timer)
+
+## v1.2.3 (2026-10-02)
 
 - **Theme Switch Bug Fix** — Fixed race condition where hover-preview wrote appearance.json asynchronously, causing theme to revert after switching tabs
 - **Memory Mode Panel (A+D)** — Added "Memory" nav item showing per-tab remembered styles list: current tab highlighted, searchable, with forget/clean-invalid/forget-all actions
