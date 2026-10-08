@@ -1,4 +1,4 @@
-﻿const { Plugin, Notice, Platform } = require('obsidian');
+const { Plugin, Notice, Platform } = require('obsidian');
 const isMobile = Platform.isMobile;
 const nodePath = isMobile ? null : require('path');
 const nodeFs = isMobile ? null : require('fs');
@@ -449,6 +449,9 @@ class SwiftSwitchPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
     _currentLang = this.settings.language || 'en';
+    this._activeSchemeClass = null;
+    this._restoreSchemeClass();
+
 
     this._statusBarEl = this.addStatusBarItem();
     this._statusBarEl.setText('SwiftSwitch');
@@ -473,7 +476,17 @@ class SwiftSwitchPlugin extends Plugin {
 
     // 标签页标题栏滚轮切换主题
     this.registerDomEvent(document, 'wheel', (e) => {
+      if (e.shiftKey && this.settings.schemeWheelEnabled) {
+        const _st = e.target;
+        if (_st instanceof Element && !_st.closest('.CodeMirror, .cm-editor, .cm-content, textarea, input, .modal, .modal-bg, #ss-snippets-popup, .ss-floating-button')) {
+          e.preventDefault();
+          this._showSchemeWheelPopup(e.clientX, e.clientY, e.deltaY > 0);
+          return;
+        }
+      }
       if (!this.settings.tabHeaderWheelTheme) return;
+      const _oldSchemePop = document.getElementById('ss-scheme-wheel-popup');
+      if (_oldSchemePop) _oldSchemePop.remove();
       const target = e.target;
       if (!(target instanceof Element)) return;
       const tabHeader = target.closest('.workspace-tab-header, .workspace-tab-header-container, .workspace-tab-header-inner');
@@ -557,20 +570,26 @@ class SwiftSwitchPlugin extends Plugin {
 
     // 监听深浅模式切换，自动重新应用护眼色和字体颜色
     this._modeObserver = new MutationObserver(() => {
-      if (this.settings.eyeCareColor) {
-        this.applyEyeCareColor();
-      }
-      if (!isMobile && this.settings.floatingButton) {
-        this.createFloatingButton();
-      }
-      if (this.settings.fontColor || this.settings.activeFont) {
-        this.applyFontSettings();
-      }
+      if (this._modeObserverTimer) clearTimeout(this._modeObserverTimer);
+      this._modeObserverTimer = setTimeout(() => {
+        this._modeObserverTimer = null;
+        if (this.settings.eyeCareColor) {
+          this.applyEyeCareColor();
+        }
+        if (!isMobile && this.settings.floatingButton) {
+          this.createFloatingButton();
+        }
+        if (this.settings.fontColor || this.settings.activeFont) {
+          this.applyFontSettings();
+        }
+      }, 50);
     });
     this._modeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
   }
 
   onunload() {
+    if (this._modeObserverTimer) { clearTimeout(this._modeObserverTimer); this._modeObserverTimer = null; }
+    if (this._schemeSaveTimer) { clearTimeout(this._schemeSaveTimer); this._schemeSaveTimer = null; this.saveSettings(); }
     if (this.settings.styleMemory && this._lastFilePath) {
       this._savePageStyle(this._lastFilePath);
     }
@@ -638,6 +657,8 @@ class SwiftSwitchPlugin extends Plugin {
       hoverDelay: 0,             // 悬停预览延时(ms)
       stylePresets: {},          // { name: { theme, isDark, eyeCareColor, activeFont, ... } } 风格组合
       navBoxes: null,            // [{ id, title, items[], auto? }] 分框配置; null=默认三框
+      schemeWheelEnabled: true,  // Shift+滚轮切换主题配色方案
+      themeSchemes: {},          // { themeName: schemeClass } 各主题当前配色 class
     }, data);
   }
 
@@ -758,6 +779,7 @@ class SwiftSwitchPlugin extends Plugin {
         this.app.customCss.theme = themeName;
       }
       if (!silent) new Notice(t('theme.switched') + (themeName ? '' : ' - ' + t('theme.restartRequired')));
+      this._onThemeChanged(themeName);
     } catch (_e) {
       new Notice(t('theme.switchFailed'));
     }
@@ -807,12 +829,11 @@ class SwiftSwitchPlugin extends Plugin {
   }
 
   async _showThemeWheelPopup(x, y, forward) {
-    const _twDark = !!(document.body.classList.contains('theme-dark') || window.matchMedia('(prefers-color-scheme: dark)').matches);
-    const _twBg = _twDark ? '#262624' : '#fcfbf8';
-    const _twBorder = _twDark ? '#3b3b37' : '#dedbd3';
-    const _twText = _twDark ? '#e8e6e0' : '#2b2a27';
-    const _twMute = _twDark ? '#8f8c84' : '#8d8a82';
-    const _twAccent = _twDark ? '#8fc2ad' : '#4f7a6a';
+    const _twBg = 'var(--background-primary)';
+    const _twBorder = 'var(--background-modifier-border)';
+    const _twText = 'var(--text-normal)';
+    const _twMute = 'var(--text-muted)';
+    const _twAccent = 'var(--interactive-accent)';
 
     const _applyItemStyle = (item, isSel) => {
       item.style.setProperty('padding', '6px 14px', 'important');
@@ -828,7 +849,7 @@ class SwiftSwitchPlugin extends Plugin {
       item.style.setProperty('align-items', 'center', 'important');
       item.style.setProperty('cursor', 'pointer');
       item.style.background = isSel ? _twAccent : '';
-      item.style.color = isSel ? '#fff' : _twText;
+      item.style.color = isSel ? 'var(--text-on-accent)' : _twText;
       item.style.fontWeight = isSel ? '600' : 'normal';
     };
 
@@ -868,6 +889,28 @@ class SwiftSwitchPlugin extends Plugin {
         if (Math.max(dx, dy) > 20) { document.removeEventListener('mousemove', pop._moveHandler); pop.remove(); }
       };
       document.addEventListener('mousemove', pop._moveHandler);
+      // 异步标记有配色方案的主题
+      if (!this._schemeThemeCache) this._schemeThemeCache = {};
+      const _itemEls = listEl.children;
+      Promise.all(list.map(async (theme) => {
+        if (!theme) return false;
+        if (this._schemeThemeCache[theme] !== undefined) return this._schemeThemeCache[theme];
+        const s = await this._parseThemeSchemes(theme);
+        const has = !!(s && s.options.length > 1);
+        this._schemeThemeCache[theme] = has;
+        return has;
+      })).then((hasArr) => {
+        if (!document.body.contains(pop)) return;
+        hasArr.forEach((has, i) => {
+          if (!has) return;
+          const el = _itemEls[i];
+          if (!el) return;
+          const tag = el.createEl('span');
+          tag.style.cssText = 'margin-left:6px;font-size:10px;color:var(--interactive-accent);font-weight:600;flex-shrink:0;';
+          tag.textContent = '⇣Shift+scroll';
+          el.title = _currentLang === 'zh' ? 'Shift+滚轮切换配色方案' : 'Shift+wheel to switch scheme';
+        });
+      });
     }
     if (forward) pop._currentIdx = pop._currentIdx < pop._themes.length - 1 ? pop._currentIdx + 1 : 0;
     else pop._currentIdx = pop._currentIdx > 0 ? pop._currentIdx - 1 : pop._themes.length - 1;
@@ -880,13 +923,208 @@ class SwiftSwitchPlugin extends Plugin {
     this._refreshPopupIfNeeded();
   }
 
+  // ─── 主题配色方案（class-select）Shift+滚轮切换 ──────────────────────
+  _normalizeSettingsYaml(yaml) {
+    const lines = yaml.split(/\r?\n/);
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      if (raw.trim() === '-' && i + 1 < lines.length) {
+        const indent = raw.match(/^[\t ]*/)[0].length;
+        out.push(raw.slice(0, indent) + '- ' + lines[i + 1].trim());
+        i++;
+      } else out.push(raw);
+    }
+    return out.join('\n');
+  }
+
+  _parseClassSelects(yaml) {
+    yaml = this._normalizeSettingsYaml(yaml);
+    const lines = yaml.split(/\r?\n/);
+    const items = [];
+    let cur = null, inOptions = false;
+    for (let raw of lines) {
+      if (!raw.trim()) continue;
+      const line = raw.trim();
+      const isDash = line.startsWith('- ');
+      const content = isDash ? line.slice(2) : line;
+      const kv = content.match(/^([a-zA-Z_-]+)\s*:\s*(.*)$/);
+      if (!kv) continue;
+      const [, key, val] = kv;
+      const v = val.trim().replace(/^['"]|['"]$/g, '');
+      if (isDash && key === 'id') {
+        if (cur) items.push(cur);
+        cur = { id: v, options: [] }; inOptions = false; continue;
+      }
+      if (!cur) continue;
+      if (isDash && key === 'label' && inOptions) { cur.options.push({ label: v }); continue; }
+      if (key === 'type') cur.type = v;
+      else if (key === 'title') cur.title = v;
+      else if (key === 'description') cur.description = v;
+      else if (key === 'default') cur.default = v;
+      else if (key === 'options') inOptions = true;
+      else if (key === 'value' && inOptions && cur.options.length) cur.options[cur.options.length - 1].value = v;
+    }
+    if (cur) items.push(cur);
+    return items.filter(it => it.type === 'class-select');
+  }
+
+  async _parseThemeSchemes(themeName) {
+    if (!themeName) return null;
+    let css = '';
+    try {
+      if (isMobile) {
+        css = await this.app.vault.adapter.read(`.obsidian/themes/${themeName}/theme.css`);
+      } else {
+        const p = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'themes', themeName, 'theme.css');
+        if (!nodeFs.existsSync(p)) return null;
+        css = nodeFs.readFileSync(p, 'utf-8');
+      }
+    } catch (_e) { return null; }
+    const start = css.indexOf('/* @settings');
+    if (start === -1) return null;
+    const end = css.indexOf('*/', start);
+    if (end === -1) return null;
+    const yaml = css.slice(start + 2, end);
+    const selects = this._parseClassSelects(yaml);
+    if (!selects.length) return null;
+    const kw = /scheme|season|palette|color\s*scheme|color\s*palette|accent\s*theme/i;
+    const match = selects.find(s => kw.test(s.id || '') || kw.test(s.title || '') || kw.test(s.description || ''));
+    return match || selects[0];
+  }
+
+  _clearActiveSchemeClass() {
+    if (this._activeSchemeClass && document.body.classList.contains(this._activeSchemeClass)) {
+      document.body.classList.remove(this._activeSchemeClass);
+    }
+    this._activeSchemeClass = null;
+  }
+
+  _applySchemeClass(schemeClass) {
+    this._clearActiveSchemeClass();
+    if (schemeClass && schemeClass !== 'none') {
+      document.body.classList.add(schemeClass);
+      this._activeSchemeClass = schemeClass;
+    }
+  }
+
+  async _restoreSchemeClass() {
+    try {
+      const { currentTheme } = await this.getThemeInfo();
+      if (!currentTheme) return;
+      const saved = this.settings.themeSchemes && this.settings.themeSchemes[currentTheme];
+      if (saved) this._applySchemeClass(saved);
+    } catch (_e) {}
+  }
+
+  async _onThemeChanged(newThemeName) {
+    this._clearActiveSchemeClass();
+    if (!newThemeName) return;
+    const saved = this.settings.themeSchemes && this.settings.themeSchemes[newThemeName];
+    if (saved) this._applySchemeClass(saved);
+  }
+
+
+  async _showSchemeWheelPopup(x, y, forward) {
+    const _now = Date.now();
+    if (this._schemeWheelLast && _now - this._schemeWheelLast < 80) return;
+    this._schemeWheelLast = _now;
+    const { currentTheme } = await this.getThemeInfo();
+    if (!currentTheme) return;
+    if (!this._schemeParseCache) this._schemeParseCache = {};
+    let scheme = this._schemeParseCache[currentTheme];
+    if (!scheme) { scheme = await this._parseThemeSchemes(currentTheme); this._schemeParseCache[currentTheme] = scheme; }
+    if (!scheme || !scheme.options.length) {
+      new Notice(_currentLang === 'zh' ? '当前主题无配色方案' : 'No color schemes');
+      return;
+    }
+    const opts = scheme.options;
+    const cur = this._activeSchemeClass || (this.settings.themeSchemes && this.settings.themeSchemes[currentTheme]) || scheme.default || '';
+    let curIdx = opts.findIndex(o => o.value === cur);
+    if (curIdx === -1) curIdx = 0;
+
+    const _swBg = 'var(--background-primary)';
+    const _swBorder = 'var(--background-modifier-border)';
+    const _swText = 'var(--text-normal)';
+    const _swMute = 'var(--text-muted)';
+    const _swAccent = 'var(--interactive-accent)';
+
+    const _applyItemStyle = (item, isSel) => {
+      item.style.setProperty('padding', '6px 14px', 'important');
+      item.style.setProperty('min-height', '32px', 'important');
+      item.style.setProperty('box-sizing', 'border-box', 'important');
+      item.style.setProperty('border-radius', '4px');
+      item.style.setProperty('font-size', '13px');
+      item.style.setProperty('white-space', 'nowrap');
+      item.style.setProperty('overflow', 'hidden');
+      item.style.setProperty('text-overflow', 'ellipsis');
+      item.style.setProperty('display', 'flex', 'important');
+      item.style.setProperty('align-items', 'center', 'important');
+      item.style.setProperty('cursor', 'pointer');
+      item.style.background = isSel ? _swAccent : '';
+      item.style.color = isSel ? 'var(--text-on-accent)' : _swText;
+      item.style.fontWeight = isSel ? '600' : 'normal';
+    };
+
+    let pop = document.getElementById('ss-scheme-wheel-popup');
+    if (pop && (pop._theme !== currentTheme || pop._opts !== opts)) { pop.remove(); pop = null; }
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.id = 'ss-scheme-wheel-popup';
+      pop.style.cssText = `position:fixed;z-index:10006;background:${_swBg};border:1px solid ${_swBorder};border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:8px;min-width:200px;max-width:300px;display:flex;flex-direction:column;gap:4px;`;
+      pop._opts = opts;
+      pop._curIdx = curIdx;
+      pop._theme = currentTheme;
+      document.body.appendChild(pop);
+      const title = pop.createEl('div');
+      title.style.cssText = `font-size:11px;font-weight:600;color:${_swMute};padding:0 4px;margin-bottom:2px;`;
+      title.textContent = (_currentLang === 'zh' ? '配色: ' : 'Scheme: ') + (scheme.title || scheme.id);
+      const listEl = pop.createEl('div');
+      listEl.style.cssText = 'overflow-y:auto;max-height:300px;display:flex;flex-direction:column;gap:2px;';
+      opts.forEach((o, i) => {
+        const item = listEl.createEl('div');
+        item.textContent = o.label || o.value;
+        item._optIdx = i;
+        _applyItemStyle(item, i === pop._curIdx);
+        item.addEventListener('click', async () => {
+          pop._curIdx = i;
+          this._applySchemeClass(opts[i].value);
+          if (!this.settings.themeSchemes) this.settings.themeSchemes = {};
+          this.settings.themeSchemes[pop._theme] = opts[i].value;
+          await this.saveSettings();
+          pop._listEl.querySelectorAll('div').forEach(el => { _applyItemStyle(el, el._optIdx === i); });
+        });
+      });
+      pop._listEl = listEl;
+      pop._moveHandler = (ev) => {
+        if (pop.contains(ev.target)) return;
+        const rect = pop.getBoundingClientRect();
+        const dx = Math.max(0, Math.max(rect.left - ev.clientX, ev.clientX - rect.right));
+        const dy = Math.max(0, Math.max(rect.top - ev.clientY, ev.clientY - rect.bottom));
+        if (Math.max(dx, dy) > 20) { document.removeEventListener('mousemove', pop._moveHandler); pop.remove(); }
+      };
+      document.addEventListener('mousemove', pop._moveHandler);
+    }
+    if (forward) pop._curIdx = pop._curIdx < pop._opts.length - 1 ? pop._curIdx + 1 : 0;
+    else pop._curIdx = pop._curIdx > 0 ? pop._curIdx - 1 : pop._opts.length - 1;
+    pop._listEl.querySelectorAll('div').forEach(item => { _applyItemStyle(item, item._optIdx === pop._curIdx); });
+    const items = pop._listEl.querySelectorAll('div');
+    if (items[pop._curIdx]) items[pop._curIdx].scrollIntoView({ block: 'nearest' });
+    pop.style.left = Math.min(x + 14, window.innerWidth - 320) + 'px';
+    pop.style.top = Math.min(y + 14, window.innerHeight - 360) + 'px';
+    this._applySchemeClass(pop._opts[pop._curIdx].value);
+    if (!this.settings.themeSchemes) this.settings.themeSchemes = {};
+    this.settings.themeSchemes[currentTheme] = pop._opts[pop._curIdx].value;
+    if (this._schemeSaveTimer) clearTimeout(this._schemeSaveTimer);
+    this._schemeSaveTimer = setTimeout(() => this.saveSettings(), 400);
+  }
+
   async _showGroupWheelPopup(x, y, forward) {
-    const _gwDark = !!(document.body.classList.contains('theme-dark') || window.matchMedia('(prefers-color-scheme: dark)').matches);
-    const _gwBg = _gwDark ? '#262624' : '#fcfbf8';
-    const _gwBorder = _gwDark ? '#3b3b37' : '#dedbd3';
-    const _gwText = _gwDark ? '#e8e6e0' : '#2b2a27';
-    const _gwMute = _gwDark ? '#8f8c84' : '#8d8a82';
-    const _gwAccent = _gwDark ? '#8fc2ad' : '#4f7a6a';
+    const _gwBg = 'var(--background-primary)';
+    const _gwBorder = 'var(--background-modifier-border)';
+    const _gwText = 'var(--text-normal)';
+    const _gwMute = 'var(--text-muted)';
+    const _gwAccent = 'var(--interactive-accent)';
 
     const wheelGroups = Array.isArray(this.settings.wheelGroups) && this.settings.wheelGroups.length > 0
       ? this.settings.wheelGroups : ['__bg__'];
@@ -938,7 +1176,7 @@ class SwiftSwitchPlugin extends Plugin {
       item.style.setProperty('align-items', 'center', 'important');
       item.style.setProperty('cursor', 'pointer');
       item.style.background = isSel ? _gwAccent : '';
-      item.style.color = isSel ? '#fff' : _gwText;
+      item.style.color = isSel ? 'var(--text-on-accent)' : _gwText;
       item.style.fontWeight = isSel ? '600' : 'normal';
     };
 
@@ -2259,6 +2497,18 @@ class SwiftSwitchPlugin extends Plugin {
 
     document.body.appendChild(btn);
     document.body.appendChild(pullCord);
+    // 精确边界约束：扣减悬浮球自身宽高，确保完全在窗口内
+    {
+      const fw = btn.offsetWidth, fh = btn.offsetHeight;
+      let lx = parseFloat(btn.style.left) || 0;
+      let ly = parseFloat(btn.style.top) || 0;
+      lx = Math.max(0, Math.min(lx, window.innerWidth - fw));
+      ly = Math.max(0, Math.min(ly, window.innerHeight - fh));
+      btn.style.transition = 'none';
+      btn.style.left = lx + 'px';
+      btn.style.top = ly + 'px';
+      requestAnimationFrame(() => { btn.style.transition = ''; });
+    }
     requestAnimationFrame(positionPullCord);
     const resizeHandler = () => positionPullCord();
     window.addEventListener('resize', resizeHandler);
@@ -2899,8 +3149,8 @@ class SwiftSwitchPlugin extends Plugin {
 
   _attachSsChipHover(chip, buildOpts) {
     if (isMobile) return;
-    if (!this.settings.chipHoverHint) return;
     chip.addEventListener('mouseenter', () => {
+      if (!this.settings.chipHoverHint) return;
       if (this._ssChipTooltipTimer) { clearTimeout(this._ssChipTooltipTimer); this._ssChipTooltipTimer = null; }
       this._showSsChipTooltip(chip, buildOpts());
     });
@@ -3012,8 +3262,8 @@ class SwiftSwitchPlugin extends Plugin {
     const popup = document.createElement('div');
     popup.id = 'ss-snippets-popup';
     popup.style.cssText = isMobile
-      ? `position:fixed;background:rgba(var(--mono-rgb-0),0.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--background-modifier-border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:10000;padding:10px 0;width:94vw;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;`
-      : `position:fixed;background:rgba(var(--mono-rgb-0),0.75);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);border:1px solid rgba(255,255,255,0.12);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;padding:10px 0;min-width:360px;min-height:200px;width:480px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;`;
+      ? `position:fixed;background:var(--background-primary);border:1px solid var(--background-modifier-border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:10000;padding:10px 0;width:94vw;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;`
+      : `position:fixed;background:var(--background-primary);border:1px solid var(--background-modifier-border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;padding:10px 0;min-width:360px;min-height:200px;width:480px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;`;
     // 恢复保存的大小
     if (!isMobile && this.settings.popupSize) {
       popup.style.width = this.settings.popupSize.width + 'px';
@@ -3032,66 +3282,20 @@ class SwiftSwitchPlugin extends Plugin {
         popup.style.top = Math.round((window.innerHeight - h) / 2) + 'px';
       });
     }
+    // 边界约束：确保 popup 不超出窗口
+    if (!isMobile) {
+      requestAnimationFrame(() => {
+        const w = popup.offsetWidth, h = popup.offsetHeight;
+        let left = parseFloat(popup.style.left) || 0;
+        let top = parseFloat(popup.style.top) || 0;
+        left = Math.max(0, Math.min(left, window.innerWidth - w));
+        top = Math.max(0, Math.min(top, window.innerHeight - h));
+        popup.style.left = left + 'px';
+        popup.style.top = top + 'px';
+      });
+    }
 
-    // ── 固定配色，不跟随主题 ──────────────────────────────────────────
-    const _isDark = !!(document.body.classList.contains('theme-dark') ||
-                       (this.app.getThemeManager && this.app.getThemeManager().isDark) ||
-                       getComputedStyle(document.body).colorScheme === 'dark' ||
-                       window.matchMedia('(prefers-color-scheme: dark)').matches);
-    const _ssFixed = _isDark ? {
-      '--mono-rgb-0': '38, 38, 36',
-      '--ss-popup-bg': '#262624',
-      '--background-primary': '#262624',
-      '--background-secondary': '#2c2c29',
-      '--background-modifier-border': '#3b3b37',
-      '--background-modifier-hover': '#383834',
-      '--text-normal': '#e8e6e0',
-      '--text-muted': '#8f8c84',
-      '--text-faint': '#5c5a54',
-      '--interactive-accent': '#8fc2ad',
-      '--interactive-accent-rgb': '143, 194, 173',
-      '--text-error': '#e0728b',
-    } : {
-      '--mono-rgb-0': '252, 251, 248',
-      '--ss-popup-bg': '#fcfbf8',
-      '--background-primary': '#fcfbf8',
-      '--background-secondary': '#f4f2ed',
-      '--background-modifier-border': '#dedbd3',
-      '--background-modifier-hover': '#ebe8e1',
-      '--text-normal': '#2b2a27',
-      '--text-muted': '#8d8a82',
-      '--text-faint': '#b8b5ac',
-      '--interactive-accent': '#4f7a6a',
-      '--interactive-accent-rgb': '79, 122, 106',
-      '--text-error': '#b0405a',
-    };
-    for (const [k, v] of Object.entries(_ssFixed)) popup.style.setProperty(k, v);
-    popup.style.background = _ssFixed['--ss-popup-bg'];
-
-    const _ssApplyFixedColors = () => {
-      const dark = !!(document.body.classList.contains('theme-dark') ||
-                       (this.app.getThemeManager && this.app.getThemeManager().isDark) ||
-                       window.matchMedia('(prefers-color-scheme: dark)').matches);
-      const fixed = dark ? {
-        '--mono-rgb-0': '38, 38, 36', '--ss-popup-bg': '#262624',
-        '--background-primary': '#262624', '--background-secondary': '#2c2c29',
-        '--background-modifier-border': '#3b3b37', '--background-modifier-hover': '#383834',
-        '--text-normal': '#e8e6e0', '--text-muted': '#8f8c84', '--text-faint': '#5c5a54',
-        '--interactive-accent': '#8fc2ad', '--interactive-accent-rgb': '143, 194, 173',
-        '--text-error': '#e0728b',
-      } : {
-        '--mono-rgb-0': '252, 251, 248', '--ss-popup-bg': '#fcfbf8',
-        '--background-primary': '#fcfbf8', '--background-secondary': '#f4f2ed',
-        '--background-modifier-border': '#dedbd3', '--background-modifier-hover': '#ebe8e1',
-        '--text-normal': '#2b2a27', '--text-muted': '#8d8a82', '--text-faint': '#b8b5ac',
-        '--interactive-accent': '#4f7a6a', '--interactive-accent-rgb': '79, 122, 106',
-        '--text-error': '#b0405a',
-      };
-      for (const [k, v] of Object.entries(fixed)) popup.style.setProperty(k, v);
-      popup.style.background = fixed['--ss-popup-bg'];
-    };
-    const _ssThemeObserver = new MutationObserver(() => { if (document.body.contains(popup)) _ssApplyFixedColors(); else _ssThemeObserver.disconnect(); });
-    _ssThemeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    // ── 配色跟随 Obsidian 主题（不注入固定色）──────────────────────────
 
     // ── 头部 ──────────────────────────────────────────────────────────
     const header = popup.createDiv();
@@ -3214,6 +3418,7 @@ class SwiftSwitchPlugin extends Plugin {
       _hdrPullCord.addEventListener('mouseleave', () => { if (!_hdrPullDragging) _hdrPullCord.style.opacity = '0.6'; });
 
       let _hdrPullDragging = false;
+      let _hdrPullDragged = false;
       let _hdrPullStartY = 0;
       const _hdrPullThreshold = 20;
       _hdrPullCord.addEventListener('mousedown', (e) => {
@@ -3235,6 +3440,8 @@ class SwiftSwitchPlugin extends Plugin {
       const _hdrOnPullEnd = async (e) => {
         if (!_hdrPullDragging) return;
         _hdrPullDragging = false;
+        _hdrPullDragged = true;
+        setTimeout(() => { _hdrPullDragged = false; }, 300);
         const dy = e.clientY - _hdrPullStartY;
         _hdrCordLine.style.transition = 'height 0.3s cubic-bezier(0.34,1.56,0.64,1)';
         _hdrCordKnob.style.transition = 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1)';
@@ -3256,7 +3463,8 @@ class SwiftSwitchPlugin extends Plugin {
       document.addEventListener('mousemove', _hdrOnPullMove);
       document.addEventListener('mouseup', _hdrOnPullEnd);
 
-      _hdrModeSwitch.addEventListener('click', async () => {
+      _hdrModeSwitch.addEventListener('click', async (e) => {
+        if (_hdrPullDragged) { _hdrPullDragged = false; return; }
         if (this.settings.floatingButton) {
           const existing = document.getElementById('ss-floating-button');
           if (existing) {
@@ -3312,8 +3520,12 @@ class SwiftSwitchPlugin extends Plugin {
     };
     const moveDrag = (clientX, clientY) => {
       if (!isDraggingPopup) return;
-      popup.style.left = Math.round(clientX - dragOffX) + 'px';
-      popup.style.top = Math.round(clientY - dragOffY) + 'px';
+      let newLeft = Math.round(clientX - dragOffX);
+      let newTop = Math.round(clientY - dragOffY);
+      newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - popup.offsetWidth));
+      newTop = Math.max(0, Math.min(newTop, window.innerHeight - popup.offsetHeight));
+      popup.style.left = newLeft + 'px';
+      popup.style.top = newTop + 'px';
       updateResizeHandlePosition();
     };
     const endDrag = () => {
@@ -3355,25 +3567,8 @@ class SwiftSwitchPlugin extends Plugin {
     } else {
       searchInput = header.createEl('input', { type: 'search' });
       searchInput.placeholder = 'Search...';
-      searchInput.style.cssText = 'border:1px solid transparent;background:var(--background-primary);color:var(--text-normal);border-radius:6px;padding:3px 0;width:0;font-size:12px;flex-shrink:0;opacity:0;transition:width 0.2s ease,opacity 0.2s ease,padding 0.2s ease,border-color 0.2s ease;overflow:hidden;';
+      searchInput.style.cssText = 'border:1px solid var(--background-modifier-border);background:var(--background-primary);color:var(--text-normal);border-radius:6px;padding:3px 8px;width:140px;font-size:12px;flex-shrink:0;';
       header.insertBefore(searchInput, _hdrMemChip);
-      const _expandSearch = () => {
-        searchInput.style.width = '140px';
-        searchInput.style.padding = '3px 8px';
-        searchInput.style.opacity = '1';
-        searchInput.style.borderColor = 'var(--background-modifier-border)';
-      };
-      const _collapseSearch = () => {
-        if (searchInput.value.trim()) return;
-        searchInput.style.width = '0';
-        searchInput.style.padding = '3px 0';
-        searchInput.style.opacity = '0';
-        searchInput.style.borderColor = 'transparent';
-      };
-      header.addEventListener('mouseenter', _expandSearch);
-      header.addEventListener('mouseleave', _collapseSearch);
-      searchInput.addEventListener('focus', _expandSearch);
-      searchInput.addEventListener('blur', _collapseSearch);
     }
 
     // ── 主体（nav + main）────────────────────────────────────────────
@@ -4552,9 +4747,9 @@ class SwiftSwitchPlugin extends Plugin {
         picker.id = 'ss-color-picker-popup';
         picker.style.cssText = `
           position:fixed;z-index:10002;
-          background:rgba(var(--mono-rgb-0),0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+          background:var(--background-primary);
           border:1px solid var(--background-modifier-border);border-radius:8px;
-          box-shadow:0 4px 16px rgba(0,0,0,0.25);padding:12px;min-width:200px;
+          box-shadow:0 4px 16px rgba(0,0,0,0.25);padding:12px;min-width:260px;
         `;
         const rect = addColorChip.getBoundingClientRect();
         picker.style.left = rect.left + 'px';
@@ -4564,42 +4759,29 @@ class SwiftSwitchPlugin extends Plugin {
           if (pRect.right > window.innerWidth) picker.style.left = (window.innerWidth - pRect.width - 8) + 'px';
           if (pRect.bottom > window.innerHeight) picker.style.top = (rect.top - pRect.height - 6) + 'px';
         });
-        const row = picker.createDiv();
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;';
-        const colorInput = row.createEl('input', { type: 'color' });
-        colorInput.value = '#ff6600';
-        colorInput.style.cssText = 'width:36px;height:28px;padding:0;cursor:pointer;border:1px solid var(--background-modifier-border);border-radius:4px;';
-        const textInput = row.createEl('input', { type: 'text' });
-        textInput.placeholder = t('eyeCare.addColorPlaceholder');
-        textInput.value = '#ff6600';
-        textInput.style.cssText = 'flex:1;padding:4px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:12px;';
-        colorInput.addEventListener('input', () => { textInput.value = colorInput.value; });
-        textInput.addEventListener('input', () => {
-          const v = textInput.value.trim();
-          if (/^#[0-9a-fA-F]{6}$/.test(v)) colorInput.value = v;
-        });
+        const ta = picker.createEl('textarea');
+        ta.placeholder = _currentLang === 'zh' ? '一行一个颜色，批量粘贴\n#ff6600\n#e8f0d4\n#f5e6e8' : 'One color per line\n#ff6600\n#e8f0d4\n#f5e6e8';
+        ta.style.cssText = 'width:100%;min-height:130px;padding:6px 8px;border:1px solid var(--background-modifier-border);border-radius:4px;background:var(--background-primary);color:var(--text-normal);font-size:12px;font-family:monospace;resize:vertical;box-sizing:border-box;';
         const btnRow = picker.createDiv();
         btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;margin-top:8px;';
         const cancelBtn = btnRow.createEl('button', { text: t('btn.cancel') });
         cancelBtn.style.cssText = 'padding:3px 10px;border:1px solid var(--background-modifier-border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px;';
         cancelBtn.addEventListener('click', () => picker.remove());
         const addBtn = btnRow.createEl('button', { text: t('eyeCare.addColor') });
-        addBtn.style.cssText = 'padding:3px 10px;border:none;border-radius:4px;background:var(--interactive-accent);color:#fff;cursor:pointer;font-size:11px;';
+        addBtn.style.cssText = 'padding:3px 10px;border:none;border-radius:4px;background:var(--interactive-accent);color:var(--text-on-accent);cursor:pointer;font-size:11px;';
         addBtn.addEventListener('click', async () => {
-          const colorVal = textInput.value.trim();
-          if (!/^#[0-9a-fA-F]{6}$/.test(colorVal)) {
-            new Notice(t('eyeCare.addColorInvalid'));
-            return;
-          }
+          const lines = ta.value.split(/\n/).map(s => s.trim()).filter(s => s);
+          const valid = lines.filter(c => /^#[0-9a-fA-F]{6}$/.test(c));
+          if (!valid.length) { new Notice(t('eyeCare.addColorInvalid')); return; }
           if (!this.settings.customBgColors) this.settings.customBgColors = [];
-          this.settings.customBgColors.push(colorVal);
-          const newIdx = this.settings.customBgColors.length - 1;
-          this.settings.eyeCareColor = `__customcolor_${newIdx}`;
+          let lastIdx = -1;
+          for (const c of valid) { this.settings.customBgColors.push(c); lastIdx = this.settings.customBgColors.length - 1; }
+          this.settings.eyeCareColor = `__customcolor_${lastIdx}`;
           for (const name of bgMembers) { this._setSnippetEnabled(name, false); }
           this.applyEyeCareColor();
           await this.saveSettings();
           picker.remove();
-          new Notice(t('eyeCare.addColorDone'));
+          new Notice(_currentLang === 'zh' ? `已添加 ${valid.length} 个背景色` : `${valid.length} colors added`);
           renderEyeCare();
         });
         document.body.appendChild(picker);
@@ -5594,10 +5776,32 @@ class SwiftSwitchPlugin extends Plugin {
 
         const boxEl = nav.createDiv();
         const hitColor = isSystem ? 'var(--text-error)' : 'var(--interactive-accent)';
-        boxEl.style.cssText = `position:relative;border:1.5px solid ${isHit ? hitColor : 'var(--background-modifier-border)'};border-radius:11px;background:var(--ss-popup-bg);padding:10px 6px 6px;margin-bottom:12px;transition:border-color 0.15s;${box.id === 'system' ? 'margin-top:auto;' : ''}`;
+        const _bdColor = isHit ? hitColor : 'var(--background-modifier-border)';
+        boxEl.style.cssText = `position:relative;border:none;border-radius:11px;padding:10px 6px 6px;margin-bottom:12px;${box.id === 'system' ? 'margin-top:auto;' : ''}`;
 
         const hd = boxEl.createDiv();
-        hd.style.cssText = 'position:absolute;top:-9px;left:12px;display:flex;align-items:center;gap:4px;background:var(--ss-popup-bg);padding:0 6px;font-size:11.5px;color:var(--text-muted);user-select:none;z-index:1;';
+        hd.style.cssText = 'position:absolute;top:-9px;left:12px;display:flex;align-items:center;gap:4px;padding:0 6px;font-size:11.5px;color:var(--text-muted);user-select:none;z-index:2;';
+
+        const _svgNs = 'http://www.w3.org/2000/svg';
+        const frameSvg = document.createElementNS(_svgNs, 'svg');
+        frameSvg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible;';
+        boxEl.appendChild(frameSvg);
+        const drawFrame = () => {
+          const w = boxEl.clientWidth, h = boxEl.clientHeight;
+          if (!w || !h) return;
+          const r = 11;
+          const gs = Math.max(0, hd.offsetLeft - 4);
+          const ge = Math.min(w, hd.offsetLeft + hd.offsetWidth + 4);
+          const ph = document.createElementNS(_svgNs, 'path');
+          ph.setAttribute('fill', 'none');
+          ph.setAttribute('stroke-width', '1.5');
+          ph.style.stroke = _bdColor;
+          ph.setAttribute('d', `M ${gs} 0 L ${r} 0 Q 0 0 0 ${r} L 0 ${h-r} Q 0 ${h} ${r} ${h} L ${w-r} ${h} Q ${w} ${h} ${w} ${h-r} L ${w} ${r} Q ${w} 0 ${w-r} 0 L ${ge} 0`);
+          frameSvg.innerHTML = '';
+          frameSvg.appendChild(ph);
+        };
+        requestAnimationFrame(drawFrame);
+        new ResizeObserver(drawFrame).observe(boxEl);
 
         const hdLabel = hd.createEl('span');
         hdLabel.textContent = boxTitle;

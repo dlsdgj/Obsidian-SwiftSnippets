@@ -1,4 +1,9 @@
-## 🆕 v1.2.4 (2026-10-02)
+## 🆕 v1.2.5 (2026-10-08)
+
+- **SVG Section Frame** — Replaced CSS border with an SVG path for nav section frames; the top edge now breaks around the section title so the title is no longer crossed/cut by the border line
+- **Always-On Search** — Desktop header search input is now always expanded (fixed 140px width) instead of hover-to-expand/collapse
+
+## v1.2.4 (2026-10-02)
 
 - **Theme Wheel Popup Fix** — Fixed popup item height/padding not rendering due to CSS override; used setProperty + !important for inline styles
 - **Group Wheel Popup** — New `_showGroupWheelPopup` method: floating button wheel now pops up a group list (same style as theme list), clickable items, mouse-distance-based close (20px)
