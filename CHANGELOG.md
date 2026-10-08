@@ -1,4 +1,14 @@
-## 🆕 v1.2.5 (2026-10-08)
+## 🆕 v1.2.6 (2026-10-09)
+
+- **Theme Scheme Highlight** — Theme chips with color schemes now show a highlight border (box-shadow); active uses `--text-on-accent`, inactive uses `--interactive-accent`
+- **Theme Scheme Bar** — After selecting a theme, an expanded scheme bar shows all color scheme options as chips (active one highlighted); click any chip to switch scheme instantly
+- **Nav Instant Refresh on Add Snippet** — Adding a new snippet now immediately refreshes the left nav dot status and counts (previously only content refreshed)
+- **Nav Instant Refresh on Background Chip** — Clicking a background color/image chip now immediately updates the "Background" nav dot status
+- **Ungrouped Context Menu** — Removed the "Add Group" option from the right-click menu on the "Ungrouped" section header (it was unintentionally triggered via content-area blank-space menu)
+- **Theme Count in Nav** — The "Themes" nav item now shows the installed theme count next to the label
+- **Nav Title Clip Fix** — Fixed the top "Appearance" section title being clipped at the top by increasing nav top padding (overflow-y:auto was cutting the absolute-positioned title)
+
+## v1.2.5 (2026-10-08)
 
 - **SVG Section Frame** — Replaced CSS border with an SVG path for nav section frames; the top edge now breaks around the section title so the title is no longer crossed/cut by the border line
 - **Always-On Search** — Desktop header search input is now always expanded (fixed 140px width) instead of hover-to-expand/collapse

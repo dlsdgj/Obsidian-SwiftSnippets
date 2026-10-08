@@ -58,6 +58,9 @@ const i18n = {
     'theme.setAsDefaultDone': '已设为新页面默认主题',
     'theme.clearDefault': '取消新页面默认主题',
     'theme.clearDefaultDone': '已取消新页面默认主题',
+    'theme.schemeSection': '主题方案',
+    'theme.noScheme': '无配色方案',
+    'theme.schemeClickHint': '点击切换配色方案',
     'eyeCare.setAsDefault': '设为新页面默认',
     'eyeCare.setAsDefaultDone': '已设为新页面默认背景',
     'eyeCare.clearDefault': '取消新页面默认背景',
@@ -268,6 +271,9 @@ const i18n = {
     'theme.setAsDefaultDone': 'Set as default theme for new pages',
     'theme.clearDefault': 'Clear default theme for new pages',
     'theme.clearDefaultDone': 'Cleared default theme for new pages',
+    'theme.schemeSection': 'Color Scheme',
+    'theme.noScheme': 'No color scheme',
+    'theme.schemeClickHint': 'Click to switch color scheme',
     'eyeCare.setAsDefault': 'Set as default for new pages',
     'eyeCare.setAsDefaultDone': 'Set as default background for new pages',
     'eyeCare.clearDefault': 'Clear default background for new pages',
@@ -431,8 +437,8 @@ const i18n = {
     'font.barEditStyle': 'Button Style (CSS)',
     'font.barDefaultText': 'f',
     'font.noFavorites': 'No favorite fonts',
-  }
-};
+    }
+  };
 
 function t(key) {
   if (i18n[_currentLang] && i18n[_currentLang].hasOwnProperty(key)) {
@@ -3579,7 +3585,7 @@ class SwiftSwitchPlugin extends Plugin {
     const nav = body.createDiv();
     nav.style.cssText = isMobile
       ? 'flex:none;border-bottom:1px solid var(--background-modifier-border);display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:6px;overflow:visible;'
-      : 'width:170px;flex:none;border-right:1px solid var(--background-modifier-border);padding:6px;overflow-y:auto;';
+      : 'width:170px;flex:none;border-right:1px solid var(--background-modifier-border);padding:14px 6px 6px;overflow-y:auto;';
     const main = body.createDiv();
     main.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 12px;min-width:0;';
 
@@ -3603,10 +3609,16 @@ class SwiftSwitchPlugin extends Plugin {
       const themeChips = themeArea.createDiv();
       themeChips.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
 
-      const applyThemeChipStyle = (el, active) => {
+      const applyThemeChipStyle = (el, active, hasScheme) => {
         el.style.borderColor = active ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
         el.style.background = active ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)';
         el.style.color = active ? '#fff' : 'var(--text-muted)';
+        const _has = hasScheme !== undefined ? hasScheme : el.dataset.ssHasScheme === '1';
+        if (_has) {
+          el.style.boxShadow = active ? '0 0 0 1px var(--text-on-accent)' : '0 0 0 1px var(--interactive-accent)';
+        } else {
+          el.style.boxShadow = '';
+        }
       };
 
       // 默认主题 chip
@@ -3643,6 +3655,7 @@ class SwiftSwitchPlugin extends Plugin {
         await this.switchTheme('');
         applyThemeChipStyle(defaultChip, true);
         themeChipEls.forEach(({ el, name }) => applyThemeChipStyle(el, false));
+        _updateSchemeBar('');
       });
       const buildDefaultThemeOpts = () => {
         const opts = [];
@@ -3763,6 +3776,22 @@ class SwiftSwitchPlugin extends Plugin {
           });
         }
         themeChipEls.push({ el: chip, name: themeName });
+        // 异步检测配色方案，有则加高亮边框
+        if (!this._schemeThemeCache) this._schemeThemeCache = {};
+        const _checkScheme = async () => {
+          if (this._schemeThemeCache[themeName] !== undefined) return this._schemeThemeCache[themeName];
+          const s = await this._parseThemeSchemes(themeName);
+          const has = !!(s && s.options.length > 1);
+          this._schemeThemeCache[themeName] = has;
+          return has;
+        };
+        _checkScheme().then((has) => {
+          if (!document.body.contains(chip)) return;
+          if (has) {
+            chip.dataset.ssHasScheme = '1';
+            applyThemeChipStyle(chip, currentTheme === themeName, true);
+          }
+        });
         this._bindHoverPreview(chip,
           () => { if (currentTheme === themeName) return; themePreviewing = true; this._previewTheme(themeName); },
           () => { if (!themePreviewing) return; themePreviewing = false; this._previewTheme(currentTheme); }
@@ -3774,6 +3803,7 @@ class SwiftSwitchPlugin extends Plugin {
           await this.switchTheme(themeName);
           applyThemeChipStyle(defaultChip, false);
           themeChipEls.forEach(({ el, name }) => applyThemeChipStyle(el, name === themeName));
+          _updateSchemeBar(themeName);
         });
         const buildThemeOpts = () => {
           const opts = [];
@@ -3974,6 +4004,45 @@ class SwiftSwitchPlugin extends Plugin {
         }
       });
 
+      // ── 主题方案栏（直接展开所有方案，点击切换）───
+      const schemeBar = themeArea.createDiv();
+      schemeBar.style.cssText = 'margin-top:8px;display:none;align-items:center;gap:6px;flex-wrap:wrap;';
+      const _updateSchemeBar = async (themeName) => {
+        schemeBar.empty();
+        if (!themeName) { schemeBar.style.display = 'none'; return; }
+        if (!this._schemeParseCache) this._schemeParseCache = {};
+        let scheme = this._schemeParseCache[themeName];
+        if (!scheme) { scheme = await this._parseThemeSchemes(themeName); this._schemeParseCache[themeName] = scheme; }
+        if (!scheme || !scheme.options || scheme.options.length === 0) { schemeBar.style.display = 'none'; return; }
+        schemeBar.style.display = 'flex';
+        const schemeLabel = schemeBar.createEl('span', { text: t('theme.schemeSection') });
+        schemeLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);margin-right:2px;';
+        const curClass = this._activeSchemeClass || (this.settings.themeSchemes && this.settings.themeSchemes[themeName]) || scheme.default || '';
+        const _applySchemeChipStyle = (el, active) => {
+          el.style.borderColor = active ? 'var(--interactive-accent)' : 'var(--background-modifier-border)';
+          el.style.background = active ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)';
+          el.style.color = active ? 'var(--text-on-accent)' : 'var(--text-muted)';
+        };
+        const schemeChipEls = [];
+        scheme.options.forEach((opt) => {
+          const isActive = opt.value === curClass;
+          const sc = schemeBar.createEl('span');
+          sc.style.cssText = 'display:inline-flex;align-items:center;padding:2px 10px;border-radius:12px;font-size:12px;cursor:pointer;user-select:none;transition:all 0.15s ease;border:1px solid var(--background-modifier-border);';
+          sc.textContent = opt.label || opt.value;
+          _applySchemeChipStyle(sc, isActive);
+          schemeChipEls.push({ el: sc, value: opt.value });
+          sc.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (opt.value === curClass) return;
+            this._applySchemeClass(opt.value);
+            if (!this.settings.themeSchemes) this.settings.themeSchemes = {};
+            this.settings.themeSchemes[themeName] = opt.value;
+            await this.saveSettings();
+            _updateSchemeBar(themeName);
+          });
+        });
+      };
+
       // ── 组合 chips ──────────────────────────────────────────────
       const presetArea = themeArea.createDiv();
       presetArea.style.cssText = 'margin-top:10px;padding-top:8px;border-top:1px dashed var(--background-modifier-border);';
@@ -4097,6 +4166,7 @@ class SwiftSwitchPlugin extends Plugin {
           setTimeout(() => document.addEventListener('click', closeMenu), 0);
         });
       }
+      _updateSchemeBar(currentTheme);
     };
 
     renderThemes();
@@ -4347,6 +4417,7 @@ class SwiftSwitchPlugin extends Plugin {
           await this.saveSettings();
           renderEyeCare();
           renderContent();
+          renderNav();
         });
         const buildImgOpts = () => {
           const opts = [];
@@ -4668,6 +4739,7 @@ class SwiftSwitchPlugin extends Plugin {
           await this.saveSettings();
           renderEyeCare();
           renderContent();
+          renderNav();
         });
         const buildColorOpts = () => {
           const opts = [];
@@ -4992,6 +5064,7 @@ class SwiftSwitchPlugin extends Plugin {
         };
         collapseIcon.addEventListener('click', toggleCollapse);
         groupLabel.addEventListener('click', toggleCollapse);
+        groupHeader.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
 
         // 拖入未分组 = 移出分组
         chipsContainer.addEventListener('dragover', (e) => {
@@ -5049,7 +5122,7 @@ class SwiftSwitchPlugin extends Plugin {
         addChip.style.color = 'var(--text-muted)';
       });
       addChip.addEventListener('click', () => {
-        this._showAddForm(popup, renderContent);
+        this._showAddForm(popup, async () => { await renderContent(); renderNav(); });
       });
     };
 
@@ -5745,9 +5818,18 @@ class SwiftSwitchPlugin extends Plugin {
       const _bgColors = this.settings.customBgColors || [];
       const _bgCount = _bgMembers.length + _bgColors.length;
       const cc = this.app.customCss;
+      let _themeCount = 0;
+      try {
+        if (!isMobile && nodeFs) {
+          const _themesDir = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'themes');
+          if (nodeFs.existsSync(_themesDir)) {
+            _themeCount = nodeFs.readdirSync(_themesDir, { withFileTypes: true }).filter(d => d.isDirectory()).length;
+          }
+        }
+      } catch (_e) {}
 
       const getItemInfo = (id) => {
-        if (id === 'theme') return { name: t('theme.section'), count: '', active: true };
+        if (id === 'theme') return { name: t('theme.section'), count: _themeCount > 0 ? String(_themeCount) : '', active: true };
         if (id === '__ungrouped__') return { name: _currentLang === 'zh' ? '未分组 Snippets' : 'ungrouped Snippets', count: String(_ungroupedCount), active: false };
         if (id === 'bg') return { name: t('eyeCare.section'), count: String(_bgCount), active: !!(this.settings.eyeCareColor) };
         if (id === 'font') return { name: t('font.section'), count: '', active: !!(this.settings.activeFont) };
