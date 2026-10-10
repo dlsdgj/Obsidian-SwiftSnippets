@@ -141,6 +141,13 @@ const i18n = {
     'eyeCare.addColorInvalid': '无效的颜色值',
     'theme.defaultMode': '新页面默认为:深/浅',
     'eyeCare.defaultMode': '新页面默认为:深/浅',
+    'sort.default': '默认',
+    'sort.nameAsc': '名称↑',
+    'sort.nameDesc': '名称↓',
+    'sort.timeDesc': '时间↓',
+    'sort.timeAsc': '时间↑',
+    'sort.custom': '自定义',
+    'sort.title': '排序',
     'settings.defaultBgMode': '新页面默认深/浅模式',
     'settings.modeNone': '不切换',
     'settings.modeDark': '深色',
@@ -354,6 +361,13 @@ const i18n = {
     'eyeCare.addColorInvalid': 'Invalid color value',
     'theme.defaultMode': 'Default mode for new pages: dark/light',
     'eyeCare.defaultMode': 'Default mode for new pages: dark/light',
+    'sort.default': 'Default',
+    'sort.nameAsc': 'Name ↑',
+    'sort.nameDesc': 'Name ↓',
+    'sort.timeDesc': 'Time ↓',
+    'sort.timeAsc': 'Time ↑',
+    'sort.custom': 'Custom',
+    'sort.title': 'Sort',
     'settings.defaultBgMode': 'Default dark/light mode for new pages',
     'settings.modeNone': 'No switch',
     'settings.modeDark': 'Dark',
@@ -484,10 +498,13 @@ class SwiftSwitchPlugin extends Plugin {
     this.registerDomEvent(document, 'wheel', (e) => {
       if (e.shiftKey && this.settings.schemeWheelEnabled) {
         const _st = e.target;
-        if (_st instanceof Element && !_st.closest('.CodeMirror, .cm-editor, .cm-content, textarea, input, .modal, .modal-bg, #ss-snippets-popup, .ss-floating-button')) {
-          e.preventDefault();
-          this._showSchemeWheelPopup(e.clientX, e.clientY, e.deltaY > 0);
-          return;
+        if (_st instanceof Element) {
+          const tabHeader = _st.closest('.workspace-tab-header, .workspace-tab-header-container, .workspace-tab-header-inner, .workspace-leaf, .view-header');
+          if (tabHeader && !_st.closest('.CodeMirror, .cm-editor, .cm-content, textarea, input, .modal, .modal-bg, #ss-snippets-popup, .ss-floating-button')) {
+            e.preventDefault();
+            this._showSchemeWheelPopup(e.clientX, e.clientY, e.deltaY > 0);
+            return;
+          }
         }
       }
       if (!this.settings.tabHeaderWheelTheme) return;
@@ -637,6 +654,7 @@ class SwiftSwitchPlugin extends Plugin {
       bgImages: [],         // [{ type: 'local', url: '...', label: '...', opacity: 0.3 }, ...]
       customBgColors: [],   // ['#ff6600', ...] 用户自定义背景色
       popupPosition: null,  // { left, top } or null
+      mobileLastNav: null,  // 移动端上次显示的 nav 项
       popupSize: null,      // { width, height } or null
       styleMemory: false,   // 记忆模式开关
       pageStyles: {},       // { filePath: { theme, isDark, eyeCareColor, enabledSnippets } }
@@ -665,6 +683,10 @@ class SwiftSwitchPlugin extends Plugin {
       navBoxes: null,            // [{ id, title, items[], auto? }] 分框配置; null=默认三框
       schemeWheelEnabled: true,  // Shift+滚轮切换主题配色方案
       themeSchemes: {},          // { themeName: schemeClass } 各主题当前配色 class
+      themeSortMode: 'default',  // 主题排序模式: default | nameAsc | nameDesc | custom
+      themeOrder: [],            // 自定义主题顺序
+      snippetSortMode: 'default',// 未分组 snippet 排序模式: default | nameAsc | nameDesc | custom
+      ungroupedOrder: [],        // 未分组 snippet 自定义顺序
     }, data);
   }
 
@@ -722,6 +744,77 @@ class SwiftSwitchPlugin extends Plugin {
 
     this._enabledSnippetsCache = [...enabledSnippets];
     return { enabledSnippets, snippetFiles };
+  }
+
+  // ─── 读取 snippet 文件修改时间 ───────────────────────────────────────
+  async _getSnippetMtimes(snippetNames) {
+    const mtimes = {};
+    try {
+      if (isMobile) {
+        for (const name of snippetNames) {
+          for (const ext of ['css', 'js']) {
+            try {
+              const st = await this.app.vault.adapter.stat('.obsidian/snippets/' + name + '.' + ext);
+              if (st) { mtimes[name] = st.mtime || 0; break; }
+            } catch (_e) {}
+          }
+        }
+      } else {
+        const snippetsDir = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'snippets');
+        for (const name of snippetNames) {
+          for (const ext of ['css', 'js']) {
+            const fp = _joinPath(snippetsDir, name + '.' + ext);
+            try {
+              if (nodeFs.existsSync(fp)) { mtimes[name] = nodeFs.statSync(fp).mtimeMs || 0; break; }
+            } catch (_e) {}
+          }
+        }
+      }
+    } catch (_e) {}
+    return mtimes;
+  }
+
+  // ─── 读取主题目录修改时间 ───────────────────────────────────────────
+  async _getThemeMtimes(themeNames) {
+    const mtimes = {};
+    try {
+      if (isMobile) {
+        for (const name of themeNames) {
+          try {
+            const st = await this.app.vault.adapter.stat('.obsidian/themes/' + name);
+            if (st) mtimes[name] = st.mtime || 0;
+          } catch (_e) {}
+        }
+      } else {
+        const themesDir = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'themes');
+        for (const name of themeNames) {
+          const dp = _joinPath(themesDir, name);
+          try {
+            if (nodeFs.existsSync(dp)) mtimes[name] = nodeFs.statSync(dp).mtimeMs || 0;
+          } catch (_e) {}
+        }
+      }
+    } catch (_e) {}
+    return mtimes;
+  }
+
+  // ─── 按当前排序模式排序主题列表 ─────────────────────────────────────
+  async _sortThemesByMode(dirs) {
+    const mode = this.settings.themeSortMode || 'default';
+    if (mode === 'nameAsc') return [...dirs].sort((a, b) => a.localeCompare(b));
+    if (mode === 'nameDesc') return [...dirs].sort((a, b) => b.localeCompare(a));
+    if (mode === 'timeDesc' || mode === 'timeAsc') {
+      const mtimes = await this._getThemeMtimes(dirs);
+      const sorted = [...dirs].sort((a, b) => (mtimes[a] || 0) - (mtimes[b] || 0));
+      return mode === 'timeDesc' ? sorted.reverse() : sorted;
+    }
+    if (mode === 'custom') {
+      const order = this.settings.themeOrder || [];
+      const ordered = order.filter(n => dirs.includes(n));
+      const rest = dirs.filter(n => !order.includes(n)).sort((a, b) => a.localeCompare(b));
+      return [...ordered, ...rest];
+    }
+    return dirs;
   }
 
   _getAllSnippetFilesSync() {
@@ -822,7 +915,8 @@ class SwiftSwitchPlugin extends Plugin {
   async _wheelSwitchTheme(forward) {
     const { currentTheme, themeDirs } = await this.getThemeInfo();
     if (themeDirs.length === 0) return;
-    const list = [''].concat(themeDirs);
+    const sortedDirs = await this._sortThemesByMode(themeDirs);
+    const list = [''].concat(sortedDirs);
     const idx = list.indexOf(currentTheme);
     let nextIdx;
     if (forward) {
@@ -857,12 +951,15 @@ class SwiftSwitchPlugin extends Plugin {
       item.style.background = isSel ? _twAccent : '';
       item.style.color = isSel ? 'var(--text-on-accent)' : _twText;
       item.style.fontWeight = isSel ? '600' : 'normal';
+      const _tag = item.querySelector('.ss-shift-tag');
+      if (_tag) _tag.style.color = isSel ? 'var(--text-on-accent)' : 'var(--interactive-accent)';
     };
 
     let pop = document.getElementById('ss-theme-wheel-popup');
     if (!pop) {
       const { currentTheme, themeDirs } = await this.getThemeInfo();
-      const list = [''].concat(themeDirs);
+      const sortedDirs = await this._sortThemesByMode(themeDirs);
+      const list = [''].concat(sortedDirs);
       pop = document.createElement('div');
       pop.id = 'ss-theme-wheel-popup';
       pop.style.cssText = `position:fixed;z-index:10005;background:${_twBg};border:1px solid ${_twBorder};border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:8px;min-width:240px;max-width:340px;display:flex;flex-direction:column;gap:4px;`;
@@ -912,7 +1009,9 @@ class SwiftSwitchPlugin extends Plugin {
           const el = _itemEls[i];
           if (!el) return;
           const tag = el.createEl('span');
-          tag.style.cssText = 'margin-left:6px;font-size:10px;color:var(--interactive-accent);font-weight:600;flex-shrink:0;';
+          tag.className = 'ss-shift-tag';
+          const _isSel = el._themeIdx === pop._currentIdx;
+          tag.style.cssText = `margin-left:6px;font-size:10px;font-weight:600;flex-shrink:0;color:${_isSel ? 'var(--text-on-accent)' : 'var(--interactive-accent)'};`;
           tag.textContent = '⇣Shift+scroll';
           el.title = _currentLang === 'zh' ? 'Shift+滚轮切换配色方案' : 'Shift+wheel to switch scheme';
         });
@@ -3299,6 +3398,15 @@ class SwiftSwitchPlugin extends Plugin {
         popup.style.left = left + 'px';
         popup.style.top = top + 'px';
       });
+    } else {
+      const _constrainMobilePopup = () => {
+        const h = popup.offsetHeight;
+        let top = parseFloat(popup.style.top) || 0;
+        const maxTop = Math.max(0, window.innerHeight - h);
+        if (top > maxTop) popup.style.top = maxTop + 'px';
+      };
+      requestAnimationFrame(_constrainMobilePopup);
+      new ResizeObserver(_constrainMobilePopup).observe(popup);
     }
 
     // ── 配色跟随 Obsidian 主题（不注入固定色）──────────────────────────
@@ -3587,7 +3695,7 @@ class SwiftSwitchPlugin extends Plugin {
       ? 'flex:none;border-bottom:1px solid var(--background-modifier-border);display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:6px;overflow:visible;'
       : 'width:170px;flex:none;border-right:1px solid var(--background-modifier-border);padding:14px 6px 6px;overflow-y:auto;';
     const main = body.createDiv();
-    main.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 12px;min-width:0;';
+    main.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 12px;min-width:0;min-height:0;';
 
     // ── 主题区域 ──────────────────────────────────────────────────────
     const themeArea = main.createDiv();
@@ -3597,8 +3705,41 @@ class SwiftSwitchPlugin extends Plugin {
       themeArea.empty();
       let { currentTheme, themeDirs } = await this.getThemeInfo();
 
-      const themeLabel = themeArea.createEl('div', { text: t('theme.section') });
-      themeLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-normal);margin-bottom:6px;';
+      const themeLabel = themeArea.createEl('div');
+      themeLabel.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-normal);margin-bottom:6px;';
+      themeLabel.createEl('span', { text: t('theme.section') });
+      const _themeSortBtn = themeLabel.createEl('span');
+      const _themeSortModes = ['default', 'nameAsc', 'nameDesc', 'timeDesc', 'timeAsc', 'custom'];
+      const _themeSortLabel = (m) => {
+        if (m === 'default') return t('sort.default');
+        if (m === 'nameAsc') return t('sort.nameAsc');
+        if (m === 'nameDesc') return t('sort.nameDesc');
+        if (m === 'timeDesc') return t('sort.timeDesc');
+        if (m === 'timeAsc') return t('sort.timeAsc');
+        return t('sort.custom');
+      };
+      const _applyThemeSortBtn = () => {
+        const m = this.settings.themeSortMode || 'default';
+        _themeSortBtn.textContent = '↕ ' + _themeSortLabel(m);
+        _themeSortBtn.style.cssText = 'font-size:10px;font-weight:400;color:var(--text-muted);cursor:pointer;user-select:none;padding:1px 6px;border-radius:8px;border:1px solid var(--background-modifier-border);transition:all 0.15s ease;';
+        if (m !== 'default') {
+          _themeSortBtn.style.borderColor = 'var(--interactive-accent)';
+          _themeSortBtn.style.color = 'var(--interactive-accent)';
+        }
+      };
+      _applyThemeSortBtn();
+      _themeSortBtn.title = t('sort.title');
+      _themeSortBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const cur = this.settings.themeSortMode || 'default';
+        const idx = _themeSortModes.indexOf(cur);
+        this.settings.themeSortMode = _themeSortModes[(idx + 1) % _themeSortModes.length];
+        await this.saveSettings();
+        await renderThemes();
+      });
+
+      // ── 主题排序 ──
+      themeDirs = await this._sortThemesByMode(themeDirs);
 
       if (themeDirs.length === 0) {
         const hint = themeArea.createEl('span', { text: t('theme.noThemes') });
@@ -3749,8 +3890,37 @@ class SwiftSwitchPlugin extends Plugin {
         const ps = this.settings.pageStyles || {};
         return Object.entries(ps).filter(([fp, p]) => p.theme === themeName).map(([fp]) => fp);
       };
+      // 自定义模式下主题拖拽排序
+      themeChips.addEventListener('dragover', (e) => {
+        if ((this.settings.themeSortMode || 'default') !== 'custom') return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      });
+      themeChips.addEventListener('drop', async (e) => {
+        if ((this.settings.themeSortMode || 'default') !== 'custom') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const dragName = e.dataTransfer.getData('text/plain');
+        if (!dragName) return;
+        const target = e.target.closest('[data-theme-name]');
+        if (!target || target === themeChips) return;
+        const targetName = target.getAttribute('data-theme-name');
+        if (!targetName || targetName === dragName) return;
+        if (!this.settings.themeOrder) this.settings.themeOrder = [];
+        let order = this.settings.themeOrder.filter(n => themeDirs.includes(n));
+        themeDirs.forEach(n => { if (!order.includes(n)) order.push(n); });
+        const fromIdx = order.indexOf(dragName);
+        const toIdx = order.indexOf(targetName);
+        if (fromIdx === -1 || toIdx === -1) return;
+        order.splice(fromIdx, 1);
+        order.splice(toIdx, 0, dragName);
+        this.settings.themeOrder = order;
+        await this.saveSettings();
+        await renderThemes();
+      });
       themeDirs.forEach(themeName => {
         const chip = themeChips.createEl('span');
+        chip.setAttribute('data-theme-name', themeName);
         const isActive = currentTheme === themeName;
         let themePreviewing = false;
         chip.style.cssText = `
@@ -3763,6 +3933,16 @@ class SwiftSwitchPlugin extends Plugin {
         const chipLabel = chip.createEl('span', { text: themeName });
         chipLabel.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
         chip.title = themeName;
+        // 自定义排序模式下启用拖拽排序
+        if ((this.settings.themeSortMode || 'default') === 'custom') {
+          chip.setAttribute('draggable', 'true');
+          chip.addEventListener('dragstart', (e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', themeName);
+            chip.style.opacity = '0.4';
+          });
+          chip.addEventListener('dragend', () => { chip.style.opacity = ''; });
+        }
         const _usedBy = _themeUsedBy(themeName);
         if (_usedBy.length > 0) {
           const badge = chip.createEl('span');
@@ -5030,7 +5210,30 @@ class SwiftSwitchPlugin extends Plugin {
       }
       const ungrouped = snippetFiles.filter(n => !groupedSnippets.has(n));
 
-      const _ungroupedFiltered = _q ? ungrouped.filter(n => n.toLowerCase().includes(_q)) : ungrouped;
+      // ── 未分组排序 ──
+      const _sortUngrouped = (arr) => {
+        const mode = this.settings.snippetSortMode || 'default';
+        if (mode === 'nameAsc') return [...arr].sort((a, b) => a.localeCompare(b));
+        if (mode === 'nameDesc') return [...arr].sort((a, b) => b.localeCompare(a));
+        if (mode === 'custom') {
+          const order = this.settings.ungroupedOrder || [];
+          const ordered = order.filter(n => arr.includes(n));
+          const rest = arr.filter(n => !order.includes(n)).sort((a, b) => a.localeCompare(b));
+          return [...ordered, ...rest];
+        }
+        return arr;
+      };
+      const _sortUngroupedByTime = async (arr) => {
+        const mode = this.settings.snippetSortMode || 'default';
+        if (mode !== 'timeDesc' && mode !== 'timeAsc') return arr;
+        const mtimes = await this._getSnippetMtimes(arr);
+        const sorted = [...arr].sort((a, b) => (mtimes[a] || 0) - (mtimes[b] || 0));
+        return mode === 'timeDesc' ? sorted.reverse() : sorted;
+      };
+      const _ungroupedSorted = _sortUngrouped(ungrouped);
+      const _ungroupedTimeSorted = await _sortUngroupedByTime(_ungroupedSorted);
+
+      const _ungroupedFiltered = _q ? _ungroupedTimeSorted.filter(n => n.toLowerCase().includes(_q)) : _ungroupedTimeSorted;
 
       if (_ungroupedFiltered.length > 0) {
         const isCollapsed = this.settings.collapsedGroups['__ungrouped__'] || false;
@@ -5049,6 +5252,37 @@ class SwiftSwitchPlugin extends Plugin {
         groupLabel.textContent = t('group.ungrouped') + ' (' + _ungroupedFiltered.length + ')';
         groupLabel.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-muted);cursor:pointer;';
 
+        // 未分组排序按钮
+        const _ugSortBtn = groupHeader.createEl('span');
+        const _ugSortModes = ['default', 'nameAsc', 'nameDesc', 'timeDesc', 'timeAsc', 'custom'];
+        const _ugSortLabel = (m) => {
+          if (m === 'default') return t('sort.default');
+          if (m === 'nameAsc') return t('sort.nameAsc');
+          if (m === 'nameDesc') return t('sort.nameDesc');
+          if (m === 'timeDesc') return t('sort.timeDesc');
+          if (m === 'timeAsc') return t('sort.timeAsc');
+          return t('sort.custom');
+        };
+        const _applyUgSortBtn = () => {
+          const m = this.settings.snippetSortMode || 'default';
+          _ugSortBtn.textContent = '↕ ' + _ugSortLabel(m);
+          _ugSortBtn.style.cssText = 'font-size:10px;color:var(--text-muted);cursor:pointer;user-select:none;padding:1px 6px;border-radius:8px;border:1px solid var(--background-modifier-border);transition:all 0.15s ease;';
+          if (m !== 'default') {
+            _ugSortBtn.style.borderColor = 'var(--interactive-accent)';
+            _ugSortBtn.style.color = 'var(--interactive-accent)';
+          }
+        };
+        _applyUgSortBtn();
+        _ugSortBtn.title = t('sort.title');
+        _ugSortBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const cur = this.settings.snippetSortMode || 'default';
+          const idx = _ugSortModes.indexOf(cur);
+          this.settings.snippetSortMode = _ugSortModes[(idx + 1) % _ugSortModes.length];
+          await this.saveSettings();
+          renderContent();
+        });
+
         const chipsContainer = groupEl.createDiv();
         chipsContainer.className = 'ss-group-chips';
         chipsContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:8px;border-radius:6px;border:1px dashed transparent;transition:border-color 0.15s ease;';
@@ -5066,7 +5300,7 @@ class SwiftSwitchPlugin extends Plugin {
         groupLabel.addEventListener('click', toggleCollapse);
         groupHeader.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
 
-        // 拖入未分组 = 移出分组
+        // 拖入未分组 = 移出分组 / 自定义模式下排序
         chipsContainer.addEventListener('dragover', (e) => {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
@@ -5079,7 +5313,29 @@ class SwiftSwitchPlugin extends Plugin {
           e.preventDefault();
           chipsContainer.style.borderColor = 'transparent';
           if (!this._dragData) return;
+          const snippetName = this._dragData.snippetName;
           const srcGroup = this._dragData.sourceGroup;
+          // 已在未分组且自定义模式 → 排序；否则移出分组
+          if (srcGroup === null && (this.settings.snippetSortMode || 'default') === 'custom') {
+            const target = e.target.closest('[data-snippet]');
+            const targetName = target ? target.getAttribute('data-snippet') : null;
+            if (targetName && targetName !== snippetName) {
+              if (!this.settings.ungroupedOrder) this.settings.ungroupedOrder = [];
+              let order = this.settings.ungroupedOrder.filter(n => ungrouped.includes(n));
+              ungrouped.forEach(n => { if (!order.includes(n)) order.push(n); });
+              const fromIdx = order.indexOf(snippetName);
+              const toIdx = order.indexOf(targetName);
+              if (fromIdx !== -1 && toIdx !== -1) {
+                order.splice(fromIdx, 1);
+                order.splice(toIdx, 0, snippetName);
+                this.settings.ungroupedOrder = order;
+                await this.saveSettings();
+              }
+            }
+            this._dragData = null;
+            renderContent();
+            return;
+          }
           await this._removeFromGroup(this._dragData.snippetName);
           this._dragData = null;
           renderContent();
@@ -5771,7 +6027,12 @@ class SwiftSwitchPlugin extends Plugin {
 
     // ── nav + state 逻辑 ──────────────────────────────────────────────
     const _firstGroup = this.settings.groupOrder.find(g => this.settings.groups[g] && g !== '__bg__') || '__ungrouped__';
-    let _ssCur = isMobile ? _firstGroup : 'theme';
+    const _validMobileNav = (id) => {
+      if (!id) return false;
+      if (['theme', 'bg', 'font', 'memory', '__ungrouped__'].includes(id)) return true;
+      return !!(this.settings.groups && this.settings.groups[id]);
+    };
+    let _ssCur = isMobile ? (this.settings.mobileLastNav && _validMobileNav(this.settings.mobileLastNav) ? this.settings.mobileLastNav : _firstGroup) : 'theme';
     const _ssAreas = { theme: themeArea, bg: eyeCareArea, snippets: contentArea, font: fontArea, fontStyle: fontStyleArea, memory: memoryArea };
 
     const renderState = async () => {};
@@ -5903,6 +6164,7 @@ class SwiftSwitchPlugin extends Plugin {
               this.settings.groupOrder.push(groupName);
               await this.saveSettings();
               _ssCur = groupName; updateAreas(); renderNav();
+              if (isMobile) { this.settings.mobileLastNav = _ssCur; this.saveSettings(); }
             }
           });
         }
@@ -5959,7 +6221,7 @@ class SwiftSwitchPlugin extends Plugin {
             n.style.cssText = `font-size:11.5px;color:${isSel ? selColor : 'var(--text-muted)'};font-variant-numeric:tabular-nums;`;
           }
 
-          btn.addEventListener('click', (e) => { e.stopPropagation(); searchInput.value = ''; _ssCur = itemId; updateAreas(); renderNav(); });
+          btn.addEventListener('click', (e) => { e.stopPropagation(); searchInput.value = ''; _ssCur = itemId; updateAreas(); renderNav(); if (isMobile) { this.settings.mobileLastNav = _ssCur; this.saveSettings(); } });
           btn.addEventListener('contextmenu', (e) => {
             e.preventDefault(); e.stopPropagation();
             document.querySelectorAll('.ss-nav-ctx-menu').forEach(m => m.remove());

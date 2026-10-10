@@ -1,4 +1,10 @@
-## 🆕 v1.2.6 (2026-10-09)
+## 🆕 v1.2.7 (2026-10-10)
+
+- **Theme Wheel Tag Color** — "⇣Shift+scroll" hint text was invisible on highlighted theme items (same color as accent background); now follows selection state (text-on-accent when selected, interactive-accent when not)
+- **Mobile Last Nav Memory** — Mobile settings panel now restores the last viewed group/nav item on reopen (saved to mobileLastNav)
+- **Mobile Panel Overflow Fix** — Fixed bottom content overflowing screen on mobile when a group has many snippets; added min-height:0 to content area and ResizeObserver to constrain popup position
+
+## v1.2.6 (2026-10-09)
 
 - **Theme Scheme Highlight** — Theme chips with color schemes now show a highlight border (box-shadow); active uses `--text-on-accent`, inactive uses `--interactive-accent`
 - **Theme Scheme Bar** — After selecting a theme, an expanded scheme bar shows all color scheme options as chips (active one highlighted); click any chip to switch scheme instantly
