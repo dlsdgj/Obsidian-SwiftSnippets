@@ -510,6 +510,13 @@ class SwiftSwitchPlugin extends Plugin {
       if (!this.settings.tabHeaderWheelTheme) return;
       const _oldSchemePop = document.getElementById('ss-scheme-wheel-popup');
       if (_oldSchemePop) _oldSchemePop.remove();
+      const _oldThemePop = document.getElementById('ss-theme-wheel-popup');
+      if (_oldThemePop && _oldThemePop._closeSchemePop) {
+        if (_oldThemePop._hoverRestoreTimer) { clearTimeout(_oldThemePop._hoverRestoreTimer); _oldThemePop._hoverRestoreTimer = null; }
+        _oldThemePop._closeSchemePop();
+        _oldThemePop._hoverBackup = null;
+        _oldThemePop._hoverTheme = null;
+      }
       const target = e.target;
       if (!(target instanceof Element)) return;
       const tabHeader = target.closest('.workspace-tab-header, .workspace-tab-header-container, .workspace-tab-header-inner');
@@ -971,25 +978,180 @@ class SwiftSwitchPlugin extends Plugin {
       title.textContent = _currentLang === 'zh' ? '主题列表' : 'Themes';
       const listEl = pop.createEl('div');
       listEl.style.cssText = 'overflow-y:auto;max-height:300px;display:flex;flex-direction:column;gap:2px;';
+      // 悬停主题预览 + 配色方案弹层（预览/应用）
+      pop._schemePop = null;
+      pop._hoverTheme = null;
+      pop._hoverBackup = null;
+      pop._hoverRestoreTimer = null;
+      pop._closeSchemePop = () => {
+        const sp = pop._schemePop;
+        if (sp) { sp.remove(); pop._schemePop = null; }
+      };
+      const _cancelHoverRestore = () => {
+        if (pop._hoverRestoreTimer) { clearTimeout(pop._hoverRestoreTimer); pop._hoverRestoreTimer = null; }
+      };
+      const _doHoverRestore = () => {
+        pop._closeSchemePop();
+        if (pop._hoverBackup) {
+          this._previewTheme(pop._hoverBackup.theme);
+          this._applySchemeClass(pop._hoverBackup.scheme);
+          pop._hoverBackup = null;
+        }
+        pop._hoverTheme = null;
+      };
+      const _scheduleHoverRestore = () => {
+        _cancelHoverRestore();
+        pop._hoverRestoreTimer = setTimeout(() => { pop._hoverRestoreTimer = null; _doHoverRestore(); }, 150);
+      };
+      pop._openSchemePop = async (theme, anchorEl) => {
+        if (pop._schemePop && pop._schemePop._theme === theme) return;
+        pop._closeSchemePop();
+        if (this._schemeThemeCache[theme] !== true) return;
+        if (!this._schemeParseCache) this._schemeParseCache = {};
+        let scheme = this._schemeParseCache[theme];
+        if (!scheme) { scheme = await this._parseThemeSchemes(theme); this._schemeParseCache[theme] = scheme; }
+        if (!scheme || !scheme.options || scheme.options.length < 2) return;
+        if (!document.body.contains(pop) || !document.body.contains(anchorEl) || !anchorEl._ssHover) return;
+        const sp = document.createElement('div');
+        sp.id = 'ss-scheme-hover-popup';
+        sp._theme = theme;
+        sp.style.cssText = `position:fixed;z-index:10006;background:${_twBg};border:1px solid ${_twBorder};border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);padding:8px;min-width:180px;max-width:280px;display:flex;flex-direction:column;gap:4px;`;
+        const spTitle = sp.createEl('div');
+        spTitle.style.cssText = `font-size:11px;font-weight:600;color:${_twMute};padding:0 4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;`;
+        spTitle.textContent = (_currentLang === 'zh' ? '配色: ' : 'Scheme: ') + (scheme.title || scheme.id);
+        const spList = sp.createEl('div');
+        spList.style.cssText = 'overflow-y:auto;max-height:300px;display:flex;flex-direction:column;gap:2px;';
+        const cur = (this.settings.themeSchemes && this.settings.themeSchemes[theme]) || scheme.default || '';
+        scheme.options.forEach((o) => {
+          const oi = spList.createEl('div');
+          oi.textContent = o.label || o.value;
+          oi._optVal = o.value;
+          _applyItemStyle(oi, o.value === cur);
+          oi.addEventListener('mouseenter', () => { this._applySchemeClass(o.value); });
+          oi.addEventListener('click', async () => {
+            this._applySchemeClass(o.value);
+            if (!this.settings.themeSchemes) this.settings.themeSchemes = {};
+            this.settings.themeSchemes[theme] = o.value;
+            await this.saveSettings();
+            await this.switchTheme(theme, true);
+            this._refreshPopupIfNeeded();
+            const ti = pop._themes.indexOf(theme);
+            if (ti >= 0) pop._currentIdx = ti;
+            pop._listEl.querySelectorAll('div').forEach(el => { _applyItemStyle(el, el._themeIdx === pop._currentIdx); });
+            _cancelHoverRestore();
+            pop._closeSchemePop();
+            pop._hoverBackup = null;
+            pop._hoverTheme = null;
+          });
+        });
+        document.body.appendChild(sp);
+        pop._schemePop = sp;
+        const pr = pop.getBoundingClientRect();
+        const ar = anchorEl.getBoundingClientRect();
+        const spW = sp.offsetWidth || 200;
+        let left = pr.right + 6;
+        if (left + spW > window.innerWidth - 8) left = pr.left - spW - 6;
+        if (left < 8) left = Math.min(pr.right + 6, Math.max(8, window.innerWidth - spW - 8));
+        let top = ar.top;
+        if (top + sp.offsetHeight > window.innerHeight - 8) top = window.innerHeight - sp.offsetHeight - 8;
+        sp.style.left = Math.max(8, left) + 'px';
+        sp.style.top = Math.max(8, top) + 'px';
+        sp.addEventListener('mouseenter', _cancelHoverRestore);
+        sp.addEventListener('mouseleave', _scheduleHoverRestore);
+      };
       list.forEach((theme, i) => {
         const item = listEl.createEl('div');
-        item.textContent = theme || t('eyeCare.default');
+        const txt = item.createEl('span');
+        txt.textContent = theme || t('eyeCare.default');
+        txt.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;';
         item._themeIdx = i;
         _applyItemStyle(item, i === pop._currentIdx);
+        let del = null;
+        if (theme) {
+          del = item.createEl('span');
+          del.className = 'ss-theme-del';
+          del.textContent = '×';
+          del.style.cssText = 'display:none;font-size:14px;font-weight:700;flex-shrink:0;cursor:pointer;color:var(--text-error);line-height:1;padding:0 3px;border-radius:3px;';
+          del.addEventListener('mouseenter', () => { del.style.background = 'var(--background-modifier-hover)'; });
+          del.addEventListener('mouseleave', () => { del.style.background = 'transparent'; });
+          del.addEventListener('click', async (ev) => {
+            ev.stopPropagation();
+            ev.preventDefault();
+            const confirmMsg = t('theme.deleteConfirm').replace('{0}', theme);
+            if (!confirm(confirmMsg)) return;
+            _cancelHoverRestore();
+            _doHoverRestore();
+            let activeTheme = '';
+            try { activeTheme = (await this.getThemeInfo()).currentTheme; } catch (_e) {}
+            if (activeTheme === theme) await this.switchTheme('');
+            try {
+              if (isMobile) {
+                await this.app.vault.adapter.rmdir('.obsidian/themes/' + theme, true);
+              } else {
+                const themePath = _joinPath(this.app.vault.adapter.basePath, '.obsidian', 'themes', theme);
+                nodeFs.rmSync(themePath, { recursive: true, force: true });
+              }
+              if (this._schemeThemeCache) delete this._schemeThemeCache[theme];
+              if (this._schemeParseCache) delete this._schemeParseCache[theme];
+              new Notice(t('theme.deleted'));
+              if (document.body.contains(pop)) {
+                const ti = pop._themes.indexOf(theme);
+                if (ti >= 0) pop._themes.splice(ti, 1);
+                item.remove();
+                Array.from(pop._listEl.children).forEach((el, ni) => { el._themeIdx = ni; });
+                if (pop._currentIdx >= pop._themes.length) pop._currentIdx = pop._themes.length - 1;
+                if (pop._currentIdx < 0) pop._currentIdx = 0;
+                pop._listEl.querySelectorAll('div').forEach(el => { _applyItemStyle(el, el._themeIdx === pop._currentIdx); });
+              }
+            } catch (_e) {
+              new Notice(t('theme.deleteFailed'));
+            }
+          });
+        }
+        item.addEventListener('mouseenter', () => {
+          _cancelHoverRestore();
+          if (del) {
+            del.style.display = 'inline-flex';
+            del.style.alignItems = 'center';
+          }
+          if (pop._hoverTheme !== theme) {
+            if (!pop._hoverBackup) pop._hoverBackup = { theme: pop._themes[pop._currentIdx], scheme: this._activeSchemeClass || '' };
+            pop._closeSchemePop();
+            item._ssHover = false;
+            this._previewTheme(theme);
+            this._applySchemeClass((this.settings.themeSchemes && this.settings.themeSchemes[theme]) || '');
+          }
+          pop._hoverTheme = theme;
+          if (theme && this._schemeThemeCache && this._schemeThemeCache[theme] === true) {
+            item._ssHover = true;
+            pop._openSchemePop(theme, item);
+          }
+        });
+        item.addEventListener('mouseleave', () => {
+          item._ssHover = false;
+          if (del) del.style.display = 'none';
+          _scheduleHoverRestore();
+        });
         item.addEventListener('click', async () => {
-          pop._currentIdx = i;
-          await this.switchTheme(pop._themes[i]);
+          _cancelHoverRestore();
+          pop._closeSchemePop();
+          pop._hoverBackup = null;
+          pop._hoverTheme = null;
+          const ci = item._themeIdx;
+          pop._currentIdx = ci;
+          await this.switchTheme(pop._themes[ci]);
           this._refreshPopupIfNeeded();
-          pop._listEl.querySelectorAll('div').forEach(el => { _applyItemStyle(el, el._themeIdx === i); });
+          pop._listEl.querySelectorAll('div').forEach(el => { _applyItemStyle(el, el._themeIdx === ci); });
         });
       });
       pop._listEl = listEl;
       pop._moveHandler = (ev) => {
         if (pop.contains(ev.target)) return;
+        if (pop._schemePop && pop._schemePop.contains(ev.target)) return;
         const rect = pop.getBoundingClientRect();
         const dx = Math.max(0, Math.max(rect.left - ev.clientX, ev.clientX - rect.right));
         const dy = Math.max(0, Math.max(rect.top - ev.clientY, ev.clientY - rect.bottom));
-        if (Math.max(dx, dy) > 20) { document.removeEventListener('mousemove', pop._moveHandler); pop.remove(); }
+        if (Math.max(dx, dy) > 20) { document.removeEventListener('mousemove', pop._moveHandler); _cancelHoverRestore(); _doHoverRestore(); pop.remove(); }
       };
       document.addEventListener('mousemove', pop._moveHandler);
       // 异步标记有配色方案的主题
@@ -1013,9 +1175,17 @@ class SwiftSwitchPlugin extends Plugin {
           const _isSel = el._themeIdx === pop._currentIdx;
           tag.style.cssText = `margin-left:6px;font-size:10px;font-weight:600;flex-shrink:0;color:${_isSel ? 'var(--text-on-accent)' : 'var(--interactive-accent)'};`;
           tag.textContent = '⇣Shift+scroll';
+          const _del = el.querySelector('.ss-theme-del');
+          if (_del) el.insertBefore(tag, _del);
           el.title = _currentLang === 'zh' ? 'Shift+滚轮切换配色方案' : 'Shift+wheel to switch scheme';
         });
       });
+    }
+    if (pop._closeSchemePop) {
+      if (pop._hoverRestoreTimer) { clearTimeout(pop._hoverRestoreTimer); pop._hoverRestoreTimer = null; }
+      pop._closeSchemePop();
+      pop._hoverBackup = null;
+      pop._hoverTheme = null;
     }
     if (forward) pop._currentIdx = pop._currentIdx < pop._themes.length - 1 ? pop._currentIdx + 1 : 0;
     else pop._currentIdx = pop._currentIdx > 0 ? pop._currentIdx - 1 : pop._themes.length - 1;
@@ -1111,6 +1281,7 @@ class SwiftSwitchPlugin extends Plugin {
       document.body.classList.add(schemeClass);
       this._activeSchemeClass = schemeClass;
     }
+    void document.body.offsetHeight;
   }
 
   async _restoreSchemeClass() {

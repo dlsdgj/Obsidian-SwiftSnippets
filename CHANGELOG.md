@@ -1,4 +1,10 @@
-## 🆕 v1.2.7 (2026-10-10)
+## 🆕 v1.2.8 (2026-10-16)
+
+- **Theme List Hover Preview** — Hovering a theme list item now previews that theme in real time (CSS only, no appearance.json write) and applies its saved color scheme; moving away restores the previous theme + scheme after 150ms
+- **Theme Delete Button** — Hovering a theme list item now shows a red "×" delete button on the right; after confirm, the theme directory is deleted (active theme falls back to default first), and the list item and scheme caches are removed in sync
+- **Scheme Hover List** — Hovering a theme with color schemes (⇣Shift+scroll tag) now shows its scheme list beside the popup (right side, or left when space is tight); hovering a scheme previews it live, clicking applies, saves, and switches to that theme
+
+## v1.2.7 (2026-10-10)
 
 - **Theme Wheel Tag Color** — "⇣Shift+scroll" hint text was invisible on highlighted theme items (same color as accent background); now follows selection state (text-on-accent when selected, interactive-accent when not)
 - **Mobile Last Nav Memory** — Mobile settings panel now restores the last viewed group/nav item on reopen (saved to mobileLastNav)
