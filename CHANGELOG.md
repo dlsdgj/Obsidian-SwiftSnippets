@@ -1,4 +1,13 @@
-## 🆕 v1.2.8 (2026-10-16)
+## 🆕 v1.2.9 (2026-10-24)
+
+- **Mobile Bottom Sheet** — The mobile popup is now a bottom-anchored sheet with a drag handle: drag the handle (or empty header area) to resize, snaps to 120 / 190 / half-screen / 86% tiers, and the chosen height is persisted. The overlay stays click-through, so notes remain visible and scrollable while you switch styles
+- **Mobile Nav as Flat Chips** — Mobile nav items are now auto-width chips that wrap into rows instead of full-width list buttons; labels get the full row width and enable counts (e.g. 3/8) are shown again
+- **Compact Mobile Layout** — Trimmed mobile vertical spacing across header margins, title size, search row, group headers, chips and chip containers (~20-24px reclaimed above the content area)
+- **Short & Extra-Short Tiers** — At ≤240px the nav collapses to a single horizontally scrollable row and the footer is hidden; at ≤150px the nav and search row are hidden too, leaving just the handle, title and content
+- **Drag Reliability Fixes** — Double-tap detection no longer swallows drag gestures (now evaluated on release), a deliberate drag moves exactly one tier in the swipe direction instead of nearer-snap bounce-back, system-cancelled gestures keep the current height rather than snapping back, `touch-action:none` added on both drag surfaces, and a touch-event fallback path added
+- **Desktop Unchanged** — Every change is behind an `isMobile` branch; desktop popup size/position, nav section boxes and drag behavior are untouched
+
+## v1.2.8 (2026-10-16)
 
 - **Theme List Hover Preview** — Hovering a theme list item now previews that theme in real time (CSS only, no appearance.json write) and applies its saved color scheme; moving away restores the previous theme + scheme after 150ms
 - **Theme Delete Button** — Hovering a theme list item now shows a red "×" delete button on the right; after confirm, the theme directory is deleted (active theme falls back to default first), and the list item and scheme caches are removed in sync

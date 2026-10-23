@@ -662,6 +662,7 @@ class SwiftSwitchPlugin extends Plugin {
       customBgColors: [],   // ['#ff6600', ...] 用户自定义背景色
       popupPosition: null,  // { left, top } or null
       mobileLastNav: null,  // 移动端上次显示的 nav 项
+      mobileSheetH: 190,    // 移动端抽屉高度（190 矮 / 半屏 / 高屏）
       popupSize: null,      // { width, height } or null
       styleMemory: false,   // 记忆模式开关
       pageStyles: {},       // { filePath: { theme, isDark, eyeCareColor, enabledSnippets } }
@@ -1027,7 +1028,13 @@ class SwiftSwitchPlugin extends Plugin {
           oi.textContent = o.label || o.value;
           oi._optVal = o.value;
           _applyItemStyle(oi, o.value === cur);
-          oi.addEventListener('mouseenter', () => { this._applySchemeClass(o.value); });
+          oi.addEventListener('mouseenter', () => {
+            this._applySchemeClass(o.value);
+            if (o.value !== cur) oi.style.background = 'var(--background-modifier-hover)';
+          });
+          oi.addEventListener('mouseleave', () => {
+            if (o.value !== cur) oi.style.background = '';
+          });
           oi.addEventListener('click', async () => {
             this._applySchemeClass(o.value);
             if (!this.settings.themeSchemes) this.settings.themeSchemes = {};
@@ -1126,10 +1133,12 @@ class SwiftSwitchPlugin extends Plugin {
             item._ssHover = true;
             pop._openSchemePop(theme, item);
           }
+          if (item._themeIdx !== pop._currentIdx) item.style.background = 'var(--background-modifier-hover)';
         });
         item.addEventListener('mouseleave', () => {
           item._ssHover = false;
           if (del) del.style.display = 'none';
+          if (item._themeIdx !== pop._currentIdx) item.style.background = '';
           _scheduleHoverRestore();
         });
         item.addEventListener('click', async () => {
@@ -3538,28 +3547,135 @@ class SwiftSwitchPlugin extends Plugin {
     const popup = document.createElement('div');
     popup.id = 'ss-snippets-popup';
     popup.style.cssText = isMobile
-      ? `position:fixed;background:var(--background-primary);border:1px solid var(--background-modifier-border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:10000;padding:10px 0;width:94vw;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;`
+      ? `position:fixed;left:0;right:0;bottom:0;height:160px;max-height:92vh;background:var(--background-primary);border:0;border-top:1px solid var(--background-modifier-border);border-radius:16px 16px 0 0;box-shadow:0 -8px 32px rgba(0,0,0,0.35);z-index:10000;padding:0;width:100%;max-width:100%;display:flex;flex-direction:column;`
       : `position:fixed;background:var(--background-primary);border:1px solid var(--background-modifier-border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.35);z-index:10000;padding:10px 0;min-width:360px;min-height:200px;width:480px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;`;
-    // 恢复保存的大小
-    if (!isMobile && this.settings.popupSize) {
-      popup.style.width = this.settings.popupSize.width + 'px';
-      popup.style.height = this.settings.popupSize.height + 'px';
+
+    // ── 移动端：底部抽屉（拖拽吸附：矮 190 / 半屏 / 高屏）──────────────
+    let _ssSheetH = 190;
+    const _ssSheetSnaps = () => { const H = window.innerHeight; return [120, 190, Math.round(H * 0.5), Math.round(H * 0.86)]; };
+    const setSheetHeight = (h, animate) => {
+      const v = Math.max(120, Math.min(Math.round(window.innerHeight * 0.92), Math.round(h)));
+      _ssSheetH = v;
+      popup.style.transition = animate ? 'height 0.25s ease' : 'none';
+      popup.style.height = v + 'px';
+      popup.classList.toggle('ss-short', v <= 240);
+      popup.classList.toggle('ss-xs', v <= 150);
+    };
+    // header 创建后复用同一套拖拽逻辑（提高移动端命中率）
+    let _sheetBindDrag = null;
+    if (isMobile) {
+      let _shStyle = document.getElementById('ss-sheet-style');
+      if (!_shStyle) {
+        _shStyle = document.createElement('style');
+        _shStyle.id = 'ss-sheet-style';
+        _shStyle.textContent = `#ss-snippets-popup>.ss-sheet-handle{flex:none;padding:14px 0 10px;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab}
+#ss-snippets-popup>.ss-sheet-handle>b{display:block;width:56px;height:5px;border-radius:3px;background:var(--text-faint)}
+#ss-snippets-popup>.ss-sheet-header{touch-action:none}
+#ss-snippets-popup.ss-short>.ss-sheet-footer{display:none!important}
+#ss-snippets-popup.ss-xs .ss-sheet-nav,#ss-snippets-popup.ss-xs>.ss-sheet-statebar{display:none!important}
+#ss-snippets-popup .ss-sheet-nav>div{display:contents}
+#ss-snippets-popup .ss-sheet-nav>div>div:first-child,
+#ss-snippets-popup .ss-sheet-nav>div>svg{display:none!important}
+#ss-snippets-popup .ss-sheet-nav>div>div:last-child{display:contents}
+#ss-snippets-popup.ss-short .ss-sheet-nav{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;max-height:none;scrollbar-width:none;padding:5px 10px}
+#ss-snippets-popup.ss-short .ss-sheet-nav::-webkit-scrollbar{display:none}`;
+        document.head.appendChild(_shStyle);
+      }
+      const handle = popup.createDiv();
+      handle.className = 'ss-sheet-handle';
+      handle.createEl('b');
+      const _sheetSave = () => { this.settings.mobileSheetH = _ssSheetH; this.saveSettings(); };
+      const _nearestIdx = (h) => {
+        const s = _ssSheetSnaps();
+        let idx = 0;
+        for (let i = 1; i < s.length; i++) { if (Math.abs(s[i] - h) < Math.abs(s[idx] - h)) idx = i; }
+        return idx;
+      };
+      const _toggleSnap = () => {
+        const s = _ssSheetSnaps();
+        setSheetHeight(_nearestIdx(_ssSheetH) >= 2 ? s[1] : s[2], true); // 矮 190 ↔ 半屏
+        _sheetSave();
+      };
+
+      let _dragY0 = null, _dragY = null, _dragH0 = 0, _moved = false, _lastTapAt = 0, _dragIdx0 = 1;
+      const _usePointer = typeof window.PointerEvent === 'function';
+      const _dragMove = (clientY) => {
+        if (_dragY0 == null) return;
+        _dragY = clientY;
+        if (Math.abs(clientY - _dragY0) > 4) _moved = true;
+        setSheetHeight(_dragH0 + _dragY0 - clientY, false);
+      };
+      // 抬手：位移小 → 回原档；否则沿滑动方向进/退一档（避免「拉了又弹回」）
+      const _dragEnd = (pid, el, cancelled) => {
+        if (_dragY0 == null) return;
+        const dy = (_dragY == null ? _dragY0 : _dragY) - _dragY0;
+        _dragY0 = null; _dragY = null;
+        popup.classList.remove('ss-drag');
+        if (pid != null && el && el.releasePointerCapture) { try { el.releasePointerCapture(pid); } catch (_e) {} }
+        if (!_moved) { _lastTapAt = Date.now(); return; } // 未产生位移 → 视为一次 tap
+        _lastTapAt = 0;
+        const s = _ssSheetSnaps();
+        // 手势被浏览器接管（pointercancel）：停在当前高度，不再吸附回弹
+        if (cancelled) { setSheetHeight(_ssSheetH, true); _sheetSave(); return; }
+        if (Math.abs(dy) < 20) { setSheetHeight(s[_dragIdx0], true); _sheetSave(); return; }
+        setSheetHeight(s[dy < 0 ? Math.min(_dragIdx0 + 1, s.length - 1) : Math.max(_dragIdx0 - 1, 0)], true);
+        _sheetSave();
+      };
+      const _down = (e, clientY, el) => {
+        if (_dragY0 != null) return; // 同一手势内 pointer / touch 会先后触发，只认第一次
+        if (e.cancelable) e.preventDefault();
+        // 双击（两次 tap 间隔 < 280ms）切换 矮 ↔ 半屏；否则进入拖拽
+        if (_lastTapAt && Date.now() - _lastTapAt < 280) { _lastTapAt = 0; _toggleSnap(); return; }
+        _dragY0 = clientY; _dragY = clientY; _dragH0 = popup.offsetHeight; _moved = false;
+        _dragIdx0 = _nearestIdx(_dragH0);
+        popup.style.transition = 'none'; // 立刻停掉可能仍在运行的动画，保证跟手
+        popup.classList.add('ss-drag');
+        if (el && el.setPointerCapture) { try { el.setPointerCapture(e.pointerId); } catch (_e) {} }
+      };
+      _sheetBindDrag = (el, pickTarget) => {
+        const guard = (e) => { if (!pickTarget) return true; return pickTarget(e.target); };
+        if (_usePointer) {
+          el.addEventListener('pointerdown', (e) => { if (!guard(e)) return; _down(e, e.clientY, el); });
+          el.addEventListener('pointermove', (e) => { if (_dragY0 == null) return; if (e.cancelable) e.preventDefault(); _dragMove(e.clientY); });
+          el.addEventListener('pointerup', (e) => { if (_dragY0 == null) return; _dragEnd(e.pointerId, el, false); });
+          el.addEventListener('pointercancel', (e) => { if (_dragY0 == null) return; _dragEnd(e.pointerId, el, true); });
+        }
+        // 触摸兜底：两条路径共用同一状态，_down 的 _dragY0 判重会屏蔽重复触发
+        el.addEventListener('touchstart', (e) => { if (!guard(e)) return; _down(e, e.touches[0].clientY, null); }, { passive: false });
+        el.addEventListener('touchmove', (e) => { if (_dragY0 == null) return; e.preventDefault(); _dragMove(e.touches[0].clientY); }, { passive: false });
+        el.addEventListener('touchend', () => _dragEnd(null, null, false));
+        el.addEventListener('touchcancel', () => _dragEnd(null, null, true));
+      };
+      _sheetBindDrag(handle, null);
+
+      const _onSheetResize = () => {
+        if (!document.body.contains(popup)) { window.removeEventListener('resize', _onSheetResize); return; }
+        setSheetHeight(_ssSheetH, false);
+      };
+      window.addEventListener('resize', _onSheetResize);
+      setSheetHeight(Math.max(190, this.settings.mobileSheetH || 190), false);
     }
-    if (!isMobile && restoreLeft && restoreTop) {
-      popup.style.left = restoreLeft;
-      popup.style.top = restoreTop;
-    } else if (!isMobile && this.settings.popupPosition) {
-      popup.style.left = this.settings.popupPosition.left;
-      popup.style.top = this.settings.popupPosition.top;
-    } else {
-      requestAnimationFrame(() => {
-        const w = popup.offsetWidth, h = popup.offsetHeight;
-        popup.style.left = Math.round((window.innerWidth - w) / 2) + 'px';
-        popup.style.top = Math.round((window.innerHeight - h) / 2) + 'px';
-      });
-    }
-    // 边界约束：确保 popup 不超出窗口
+
+    // 恢复保存的大小（桌面端）
     if (!isMobile) {
+      if (this.settings.popupSize) {
+        popup.style.width = this.settings.popupSize.width + 'px';
+        popup.style.height = this.settings.popupSize.height + 'px';
+      }
+      if (restoreLeft && restoreTop) {
+        popup.style.left = restoreLeft;
+        popup.style.top = restoreTop;
+      } else if (this.settings.popupPosition) {
+        popup.style.left = this.settings.popupPosition.left;
+        popup.style.top = this.settings.popupPosition.top;
+      } else {
+        requestAnimationFrame(() => {
+          const w = popup.offsetWidth, h = popup.offsetHeight;
+          popup.style.left = Math.round((window.innerWidth - w) / 2) + 'px';
+          popup.style.top = Math.round((window.innerHeight - h) / 2) + 'px';
+        });
+      }
+      // 边界约束：确保 popup 不超出窗口
       requestAnimationFrame(() => {
         const w = popup.offsetWidth, h = popup.offsetHeight;
         let left = parseFloat(popup.style.left) || 0;
@@ -3569,22 +3685,16 @@ class SwiftSwitchPlugin extends Plugin {
         popup.style.left = left + 'px';
         popup.style.top = top + 'px';
       });
-    } else {
-      const _constrainMobilePopup = () => {
-        const h = popup.offsetHeight;
-        let top = parseFloat(popup.style.top) || 0;
-        const maxTop = Math.max(0, window.innerHeight - h);
-        if (top > maxTop) popup.style.top = maxTop + 'px';
-      };
-      requestAnimationFrame(_constrainMobilePopup);
-      new ResizeObserver(_constrainMobilePopup).observe(popup);
     }
 
     // ── 配色跟随 Obsidian 主题（不注入固定色）──────────────────────────
 
     // ── 头部 ──────────────────────────────────────────────────────────
     const header = popup.createDiv();
-    header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:0 12px;cursor:move;flex-shrink:0;';
+    header.style.cssText = isMobile
+      ? 'display:flex;align-items:center;gap:6px;margin-bottom:4px;padding:0 10px;cursor:move;flex-shrink:0;'
+      : 'display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:0 12px;cursor:move;flex-shrink:0;';
+    if (isMobile) header.classList.add('ss-sheet-header');
 
     const leftHeader = header.createDiv();
     leftHeader.style.cssText = 'display:flex;align-items:center;gap:8px;';
@@ -3617,11 +3727,13 @@ class SwiftSwitchPlugin extends Plugin {
     });
 
     const title = leftHeader.createEl('h3', { text: t('popup.title') });
-    title.style.cssText = 'margin:0;font-size:15px;color:var(--text-normal);';
+    title.style.cssText = isMobile
+      ? 'margin:0;font-size:13px;color:var(--text-normal);'
+      : 'margin:0;font-size:15px;color:var(--text-normal);';
 
     const versionTag = leftHeader.createEl('span');
      versionTag.textContent = 'v' + (this.manifest?.version || '');
-    versionTag.style.cssText = 'font-size:10px;color:var(--text-faint);margin-left:2px;align-self:flex-end;margin-bottom:2px;';
+    versionTag.style.cssText = 'font-size:10px;color:var(--text-faint);margin-left:2px;align-self:flex-end;margin-bottom:2px;' + (isMobile ? 'display:none;' : '');
 
     if (isMobile) {
       const modeSwitch = leftHeader.createEl('span');
@@ -3795,9 +3907,15 @@ class SwiftSwitchPlugin extends Plugin {
       const pv3 = document.getElementById('ss-img-preview'); if (pv3) pv3.remove();
     });
 
+    // 移动端：头部空白处也可拖动抽屉高度（避开所有可点控件）
+    if (isMobile && _sheetBindDrag) {
+      _sheetBindDrag(header, (target) => target === header || target.tagName === 'H3');
+    }
+
     // ── 拖拽弹窗 ──────────────────────────────────────────────────────
     let isDraggingPopup = false, dragOffX = 0, dragOffY = 0;
     const startDrag = (clientX, clientY) => {
+      if (isMobile) return; // 移动端为贴底抽屉，不改位置
       isDraggingPopup = true;
       const rect = popup.getBoundingClientRect();
       dragOffX = clientX - Math.round(rect.left);
@@ -3825,30 +3943,33 @@ class SwiftSwitchPlugin extends Plugin {
       if (e.target === closeBtn || e.target === langSwitch || e.target === _hdrMemChip || e.target === searchInput || e.target.closest('.ss-mode-switch')) return;
       startDrag(e.clientX, e.clientY);
     });
-    document.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
-    document.addEventListener('mouseup', () => endDrag());
-    header.addEventListener('touchstart', (e) => {
-      if (e.target === closeBtn || e.target === langSwitch || e.target === _hdrMemChip || e.target === searchInput || e.target.closest('.ss-mode-switch')) return;
-      const t = e.touches[0];
-      startDrag(t.clientX, t.clientY);
-    }, { passive: true });
-    document.addEventListener('touchmove', (e) => {
-      if (!isDraggingPopup) return;
-      e.preventDefault();
-      const t = e.touches[0];
-      moveDrag(t.clientX, t.clientY);
-    }, { passive: false });
-    document.addEventListener('touchend', () => endDrag());
+    if (!isMobile) {
+      document.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
+      document.addEventListener('mouseup', () => endDrag());
+      header.addEventListener('touchstart', (e) => {
+        if (e.target === closeBtn || e.target === langSwitch || e.target === _hdrMemChip || e.target === searchInput || e.target.closest('.ss-mode-switch')) return;
+        const t = e.touches[0];
+        startDrag(t.clientX, t.clientY);
+      }, { passive: true });
+      document.addEventListener('touchmove', (e) => {
+        if (!isDraggingPopup) return;
+        e.preventDefault();
+        const t = e.touches[0];
+        moveDrag(t.clientX, t.clientY);
+      }, { passive: false });
+      document.addEventListener('touchend', () => endDrag());
+    }
 
 
     // ── 搜索框（手机端 stateBar / 桌面端标题栏悬停展开）──────────────
     let searchInput;
     if (isMobile) {
       const stateBar = popup.createDiv();
-      stateBar.style.cssText = 'flex-shrink:0;display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--background-modifier-border);background:rgba(var(--mono-rgb-0),0.3);';
+      stateBar.classList.add('ss-sheet-statebar');
+      stateBar.style.cssText = 'flex-shrink:0;display:flex;align-items:center;gap:8px;padding:4px 10px;border-bottom:1px solid var(--background-modifier-border);background:rgba(var(--mono-rgb-0),0.3);';
       searchInput = stateBar.createEl('input', { type: 'search' });
       searchInput.placeholder = 'Search...';
-      searchInput.style.cssText = 'border:1px solid var(--background-modifier-border);background:var(--background-primary);color:var(--text-normal);border-radius:6px;padding:3px 8px;width:100%;font-size:12px;flex-shrink:0;';
+      searchInput.style.cssText = 'border:1px solid var(--background-modifier-border);background:var(--background-primary);color:var(--text-normal);border-radius:6px;padding:2px 8px;width:100%;font-size:12px;flex-shrink:0;';
     } else {
       searchInput = header.createEl('input', { type: 'search' });
       searchInput.placeholder = 'Search...';
@@ -3863,10 +3984,13 @@ class SwiftSwitchPlugin extends Plugin {
       : 'flex:1;display:flex;min-height:0;';
     const nav = body.createDiv();
     nav.style.cssText = isMobile
-      ? 'flex:none;border-bottom:1px solid var(--background-modifier-border);display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:6px;overflow:visible;'
+      ? 'flex:none;border-bottom:1px solid var(--background-modifier-border);display:flex;flex-wrap:wrap;gap:5px;padding:5px 10px;overflow-y:auto;max-height:92px;'
       : 'width:170px;flex:none;border-right:1px solid var(--background-modifier-border);padding:14px 6px 6px;overflow-y:auto;';
+    if (isMobile) nav.classList.add('ss-sheet-nav');
     const main = body.createDiv();
-    main.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 12px;min-width:0;min-height:0;';
+    main.style.cssText = isMobile
+      ? 'flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 10px;min-width:0;min-height:0;'
+      : 'flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 12px;min-width:0;min-height:0;';
 
     // ── 主题区域 ──────────────────────────────────────────────────────
     const themeArea = main.createDiv();
@@ -4095,8 +4219,8 @@ class SwiftSwitchPlugin extends Plugin {
         const isActive = currentTheme === themeName;
         let themePreviewing = false;
         chip.style.cssText = `
-          display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;
-          user-select:none;transition:all 0.15s ease;max-width:220px;overflow:hidden;
+          display:inline-flex;align-items:center;gap:4px;${isMobile ? 'padding:2px 9px;border-radius:13px;font-size:11.5px;max-width:160px;' : 'padding:3px 10px;border-radius:14px;font-size:12px;max-width:220px;'}cursor:pointer;
+          user-select:none;transition:all 0.15s ease;overflow:hidden;
           border:1px solid ${isActive ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
           background:${isActive ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)'};
           color:${isActive ? '#fff' : 'var(--text-muted)'};
@@ -4619,7 +4743,9 @@ class SwiftSwitchPlugin extends Plugin {
 
       const chipsContainer = eyeCareArea.createDiv();
       chipsContainer.className = 'ss-group-chips';
-      chipsContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:4px;border-radius:6px;border:1px dashed var(--background-modifier-border);transition:border-color 0.15s ease;';
+      chipsContainer.style.cssText = isMobile
+        ? 'display:flex;flex-wrap:wrap;gap:5px;min-height:24px;padding:3px;border-radius:6px;border:1px dashed var(--background-modifier-border);transition:border-color 0.15s ease;'
+        : 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:4px;border-radius:6px;border:1px dashed var(--background-modifier-border);transition:border-color 0.15s ease;';
 
       const bgMembers = this.settings.groups[BG_GROUP_KEY] || [];
       const { enabledSnippets, snippetFiles } = await this.getSnippetInfo();
@@ -5289,7 +5415,9 @@ class SwiftSwitchPlugin extends Plugin {
 
         // 分组头
         const groupHeader = groupEl.createDiv();
-        groupHeader.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:8px;user-select:none;';
+        groupHeader.style.cssText = isMobile
+          ? 'display:flex;align-items:center;gap:6px;margin-bottom:4px;user-select:none;'
+          : 'display:flex;align-items:center;gap:6px;margin-bottom:8px;user-select:none;';
 
         const collapseIcon = groupHeader.createEl('span');
         collapseIcon.textContent = isCollapsed ? '▶' : '▼';
@@ -5332,7 +5460,9 @@ class SwiftSwitchPlugin extends Plugin {
         // 折叠/展开
         const chipsContainer = groupEl.createDiv();
         chipsContainer.className = 'ss-group-chips';
-        chipsContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:8px;border-radius:6px;border:1px dashed transparent;transition:border-color 0.15s ease;';
+        chipsContainer.style.cssText = isMobile
+          ? 'display:flex;flex-wrap:wrap;gap:5px;min-height:24px;padding:5px;border-radius:6px;border:1px dashed transparent;transition:border-color 0.15s ease;'
+          : 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:8px;border-radius:6px;border:1px dashed transparent;transition:border-color 0.15s ease;';
         chipsContainer.style.display = isCollapsed ? 'none' : 'flex';
 
         const toggleCollapse = async (e) => {
@@ -5413,7 +5543,9 @@ class SwiftSwitchPlugin extends Plugin {
         groupEl.style.cssText = 'margin-bottom:16px;';
 
         const groupHeader = groupEl.createDiv();
-        groupHeader.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;user-select:none;';
+        groupHeader.style.cssText = isMobile
+          ? 'display:flex;align-items:center;gap:6px;margin-bottom:4px;user-select:none;'
+          : 'display:flex;align-items:center;gap:6px;margin-bottom:6px;user-select:none;';
 
         const collapseIcon = groupHeader.createEl('span');
         collapseIcon.textContent = isCollapsed ? '▶' : '▼';
@@ -5456,7 +5588,9 @@ class SwiftSwitchPlugin extends Plugin {
 
         const chipsContainer = groupEl.createDiv();
         chipsContainer.className = 'ss-group-chips';
-        chipsContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:8px;border-radius:6px;border:1px dashed transparent;transition:border-color 0.15s ease;';
+        chipsContainer.style.cssText = isMobile
+          ? 'display:flex;flex-wrap:wrap;gap:5px;min-height:24px;padding:5px;border-radius:6px;border:1px dashed transparent;transition:border-color 0.15s ease;'
+          : 'display:flex;flex-wrap:wrap;gap:6px;min-height:28px;padding:8px;border-radius:6px;border:1px dashed transparent;transition:border-color 0.15s ease;';
         chipsContainer.style.display = isCollapsed ? 'none' : 'flex';
 
         const toggleCollapse = async (e) => {
@@ -6376,20 +6510,31 @@ class SwiftSwitchPlugin extends Plugin {
           const selColor = isSystem ? 'var(--text-error)' : 'var(--interactive-accent)';
 
           const btn = listEl.createEl('button');
-          btn.style.cssText = `display:flex;width:100%;align-items:center;gap:6px;background:none;border:0;border-radius:7px;padding:6px 9px;text-align:left;cursor:pointer;font-size:12px;color:${isSel ? selColor : 'var(--text-normal)'};${isSel ? 'background:' + (isSystem ? 'rgba(var(--mono-rgb-0),0.15)' : 'rgba(var(--interactive-accent-rgb),0.12)') + ';font-weight:600;' : ''}`;
-          if (isMobile) btn.style.cssText += 'border:1px solid var(--background-modifier-border);min-width:0;';
+          if (isMobile) {
+            // 移动端：平铺 chip，宽度随字数自适应
+            const _chipBg = isSel ? selColor : 'rgba(var(--mono-rgb-0),0.4)';
+            btn.style.cssText = `display:inline-flex;width:auto;max-width:100%;align-items:center;gap:5px;border-radius:13px;padding:3px 10px;min-height:26px;text-align:left;cursor:pointer;font-size:11.5px;background:${_chipBg};border:1px solid ${isSel ? selColor : 'var(--background-modifier-border)'};color:${isSel ? '#fff' : 'var(--text-normal)'};${isSel ? 'font-weight:600;' : ''}`;
+          } else {
+            btn.style.cssText = `display:flex;width:100%;align-items:center;gap:6px;background:none;border:0;border-radius:7px;padding:6px 9px;text-align:left;cursor:pointer;font-size:12px;color:${isSel ? selColor : 'var(--text-normal)'};${isSel ? 'background:' + (isSystem ? 'rgba(var(--mono-rgb-0),0.15)' : 'rgba(var(--interactive-accent-rgb),0.12)') + ';font-weight:600;' : ''}`;
+          }
 
           const dot = btn.createEl('span');
-          dot.style.cssText = `width:7px;height:7px;border-radius:50%;flex:none;border:1.5px solid ${info.active ? 'var(--interactive-accent)' : 'var(--text-faint)'};${info.active ? 'background:var(--interactive-accent);' : ''}`;
+          dot.style.cssText = isMobile
+            ? `width:6px;height:6px;border-radius:50%;flex:none;border:1.5px solid ${info.active ? 'var(--interactive-accent)' : 'var(--text-faint)'};${info.active ? 'background:var(--interactive-accent);' : ''}`
+            : `width:7px;height:7px;border-radius:50%;flex:none;border:1.5px solid ${info.active ? 'var(--interactive-accent)' : 'var(--text-faint)'};${info.active ? 'background:var(--interactive-accent);' : ''}`;
 
           const lbl = btn.createEl('span');
           lbl.textContent = info.name;
-          lbl.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+          lbl.style.cssText = isMobile
+            ? 'flex:none;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+            : 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
 
-          if (info.count !== '' && !isMobile) {
+          if (info.count !== '') {
             const n = btn.createEl('span');
             n.textContent = info.count;
-            n.style.cssText = `font-size:11.5px;color:${isSel ? selColor : 'var(--text-muted)'};font-variant-numeric:tabular-nums;`;
+            n.style.cssText = isMobile
+              ? `font-size:10.5px;opacity:0.75;color:${isSel ? '#fff' : 'var(--text-muted)'};font-variant-numeric:tabular-nums;`
+              : `font-size:11.5px;color:${isSel ? selColor : 'var(--text-muted)'};font-variant-numeric:tabular-nums;`;
           }
 
           btn.addEventListener('click', (e) => { e.stopPropagation(); searchInput.value = ''; _ssCur = itemId; updateAreas(); renderNav(); if (isMobile) { this.settings.mobileLastNav = _ssCur; this.saveSettings(); } });
@@ -6574,7 +6719,10 @@ class SwiftSwitchPlugin extends Plugin {
 
     renderAll();
     const footer = popup.createDiv();
-    footer.style.cssText = 'padding-top:10px;margin-top:auto;border-top:1px solid var(--background-modifier-border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;opacity:0.5;transition:opacity 0.3s ease;cursor:default;position:relative;flex-shrink:0;';
+    footer.classList.add('ss-sheet-footer');
+    footer.style.cssText = isMobile
+      ? 'padding:6px 10px calc(2px + env(safe-area-inset-bottom));margin-top:auto;border-top:1px solid var(--background-modifier-border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;opacity:0.5;transition:opacity 0.3s ease;cursor:default;position:relative;flex-shrink:0;'
+      : 'padding-top:10px;margin-top:auto;border-top:1px solid var(--background-modifier-border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;opacity:0.5;transition:opacity 0.3s ease;cursor:default;position:relative;flex-shrink:0;';
 
 
     footer.addEventListener('mouseenter', () => { footer.style.opacity = '1'; });
@@ -7020,10 +7168,13 @@ class SwiftSwitchPlugin extends Plugin {
 
     const isExclusive = currentGroup && this.settings.exclusiveGroups && this.settings.exclusiveGroups.includes(currentGroup);
 
+    const _chipBase = isMobile
+      ? 'display:inline-block;padding:2px 9px;border-radius:13px;font-size:11.5px;max-width:150px;'
+      : 'display:inline-block;padding:3px 10px;border-radius:14px;font-size:12px;max-width:200px;';
     const applyStyle = (en) => {
       chip.style.cssText = `
-        display:inline-block;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;
-        user-select:none;transition:all 0.15s ease;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+        ${_chipBase}cursor:pointer;
+        user-select:none;transition:all 0.15s ease;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
         border:1px solid ${en ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'};
         background:${en ? 'var(--interactive-accent)' : 'rgba(var(--mono-rgb-0),0.5)'};
         color:${en ? '#fff' : 'var(--text-muted)'};
